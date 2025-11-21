@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/language_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/app_initializer.dart';
 
 class LanguageSelectionScreen extends StatelessWidget {
   const LanguageSelectionScreen({super.key});
@@ -24,8 +25,8 @@ class LanguageSelectionScreen extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.blue.shade700,
-              Colors.blue.shade400,
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.primaryContainer,
             ],
           ),
         ),
@@ -34,18 +35,18 @@ class LanguageSelectionScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
+                Icon(
                   Icons.language,
                   size: 80,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
                 const SizedBox(height: 30),
                 Text(
                   l10n.translate('select_language'),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -54,7 +55,7 @@ class LanguageSelectionScreen extends StatelessWidget {
                   'اختر اللغة | ቋንቋ ይምረጡ',
                   style: TextStyle(
                     fontSize: 20,
-                    color: Colors.white.withOpacity(0.9),
+                    color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.9),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -68,13 +69,15 @@ class LanguageSelectionScreen extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () async {
                         await languageProvider.setLanguage(Locale(lang['code']!));
+                        // Mark language as selected
+                        await AppInitializer.setLanguageSelected();
                         if (context.mounted) {
                           Navigator.of(context).pushReplacementNamed('/auth');
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.blue.shade700,
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        foregroundColor: Theme.of(context).colorScheme.primary,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 30,
                           vertical: 20,
@@ -98,9 +101,10 @@ class LanguageSelectionScreen extends StatelessWidget {
                             children: [
                               Text(
                                 lang['name']!,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -108,7 +112,7 @@ class LanguageSelectionScreen extends StatelessWidget {
                                 lang['native']!,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.blue.shade700.withOpacity(0.7),
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),

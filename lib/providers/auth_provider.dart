@@ -24,16 +24,15 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> _init() async {
-    // Check for existing session
-    await _checkSession();
-
-    // Listen to auth state changes
+    // Listen to auth state changes FIRST (Firebase Auth persists automatically)
+    // This stream will emit the current user if Firebase Auth has restored the session
     _authService.authStateChanges.listen((User? firebaseUser) async {
       if (firebaseUser != null) {
         await loadUserData(firebaseUser.uid);
-        // Save session
-        await _sessionService.saveSession(firebaseUser.uid);
+        // Save session with rememberMe = true for persistent auth
+        await _sessionService.saveSession(firebaseUser.uid, rememberMe: true);
         _isSessionValid = true;
+        notifyListeners();
       } else {
         _user = null;
         _isSessionValid = false;
@@ -41,17 +40,41 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
       }
     });
+    
+    // Wait for Firebase Auth to restore session from local storage
+    await Future.delayed(const Duration(milliseconds: 1000));
+    
+    // Check for existing session after Firebase Auth has had time to restore
+    await _checkSession();
   }
 
   Future<void> _checkSession() async {
     try {
+      // First check if Firebase Auth has restored the user (most reliable)
+      final user = _authService.currentUser;
+      if (user != null) {
+        await loadUserData(user.uid);
+        await _sessionService.saveSession(user.uid, rememberMe: true);
+        await _sessionService.refreshSession();
+        _isSessionValid = true;
+        notifyListeners();
+        return;
+      }
+      
+      // If Firebase Auth hasn't restored, check SharedPreferences
       final hasSession = await _sessionService.hasValidSession();
       if (hasSession) {
-        final user = _authService.currentUser;
-        if (user != null) {
-          await loadUserData(user.uid);
-          await _sessionService.refreshSession();
-          _isSessionValid = true;
+        final savedUserId = await _sessionService.getSession();
+        if (savedUserId != null) {
+          // Wait a bit more for Firebase Auth to restore
+          await Future.delayed(const Duration(milliseconds: 500));
+          final userRetry = _authService.currentUser;
+          if (userRetry != null && userRetry.uid == savedUserId) {
+            await loadUserData(userRetry.uid);
+            await _sessionService.refreshSession();
+            _isSessionValid = true;
+            notifyListeners();
+          }
         }
       }
     } catch (e) {
@@ -67,6 +90,10 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
 
       _user = await _authService.getUserData(uid);
+      if (_user != null) {
+        // Ensure session is saved whenever we load user data
+        await _sessionService.saveSession(uid, rememberMe: true);
+      }
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -81,7 +108,7 @@ class AuthProvider with ChangeNotifier {
     required String email,
     required String phone,
     required String password,
-    bool rememberMe = true,
+    bool rememberMe = true, // Default to true for persistent auth
   }) async {
     try {
       _isLoading = true;
@@ -116,7 +143,7 @@ class AuthProvider with ChangeNotifier {
   Future<bool> login({
     required String email,
     required String password,
-    bool rememberMe = true,
+    bool rememberMe = true, // Default to true for persistent auth
   }) async {
     try {
       _isLoading = true;
@@ -164,18 +191,45 @@ class AuthProvider with ChangeNotifier {
   // Check and restore session on app start
   Future<bool> restoreSession() async {
     try {
-      final hasSession = await _sessionService.hasValidSession();
-      if (hasSession) {
-        final user = _authService.currentUser;
-        if (user != null) {
-          await loadUserData(user.uid);
+      // First check if we have a saved session
+      final userId = await _sessionService.getSession();
+      if (userId == null) {
+        return false;
+      }
+
+      // Wait a bit for Firebase Auth to restore session
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Check if Firebase Auth has restored the user
+      final user = _authService.currentUser;
+      if (user != null && user.uid == userId) {
+        // User is authenticated in Firebase - load their data
+        await loadUserData(user.uid);
+        await _sessionService.refreshSession();
+        _isSessionValid = true;
+        notifyListeners();
+        return true;
+      } else {
+        // Session exists but Firebase user is null - might need to wait more
+        // Try one more time after a longer delay
+        await Future.delayed(const Duration(milliseconds: 500));
+        final userRetry = _authService.currentUser;
+        if (userRetry != null && userRetry.uid == userId) {
+          await loadUserData(userRetry.uid);
           await _sessionService.refreshSession();
           _isSessionValid = true;
+          notifyListeners();
           return true;
         }
+        // Session exists but Firebase user is null - clear invalid session
+        await _sessionService.clearSession();
+        _isSessionValid = false;
+        return false;
       }
-      return false;
     } catch (e) {
+      // Error restoring session - clear it
+      await _sessionService.clearSession();
+      _isSessionValid = false;
       return false;
     }
   }

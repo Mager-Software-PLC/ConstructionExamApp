@@ -88,7 +88,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white),
+                Icon(Icons.check_circle, color: Theme.of(context).colorScheme.onError),
                 const SizedBox(width: 12),
                 Text(l10n.translate('well_done')),
               ],
@@ -119,8 +119,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFF1E3A8A).withOpacity(0.05),
-                Colors.white,
+                Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                Theme.of(context).colorScheme.surface,
               ],
             ),
           ),
@@ -140,8 +140,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFF1E3A8A).withOpacity(0.05),
-                Colors.white,
+                Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                Theme.of(context).colorScheme.surface,
               ],
             ),
           ),
@@ -152,14 +152,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 Icon(
                   Icons.quiz_outlined,
                   size: 80,
-                  color: Colors.grey.shade400,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   l10n.translate('no_questions_available'),
                   style: TextStyle(
                     fontSize: 18,
-                    color: Colors.grey.shade600,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -188,10 +188,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             Text(l10n.translate('app_name')),
             Text(
               '${l10n.translate('question')} ${_currentQuestionIndex + 1} ${l10n.translate('of')} ${questions.length}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.normal,
-                color: Colors.white70,
+                color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
               ),
             ),
           ],
@@ -202,10 +202,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.03),
-              Colors.white.withOpacity(0.95),
-            ],
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.03),
+                Theme.of(context).colorScheme.surface.withOpacity(0.95),
+              ],
           ),
         ),
         child: Column(
@@ -214,10 +214,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -230,18 +230,18 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   children: [
                     Text(
                       '${(_currentQuestionIndex + 1)} / ${questions.length}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E3A8A),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     Text(
                       '${(progress * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E3A8A),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ],
@@ -252,8 +252,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   child: LinearProgressIndicator(
                     value: progress,
                     minHeight: 8,
-                    backgroundColor: Colors.grey.shade300,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1E3A8A)),
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
                   ),
                 ),
               ],
@@ -273,13 +273,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          const Color(0xFF1E3A8A).withOpacity(0.1),
-                          Colors.white,
+                          Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          Theme.of(context).colorScheme.surface,
                         ],
                       ),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: const Color(0xFF1E3A8A).withOpacity(0.2),
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
                         width: 1,
                       ),
                     ),
@@ -289,15 +289,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E3A8A),
+                            color: Theme.of(context).colorScheme.primary,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Q',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.onPrimary,
                             ),
                           ),
                         ),
@@ -305,11 +305,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         Expanded(
                           child: Text(
                             question.text,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               height: 1.5,
-                              color: Color(0xFF1E3A8A),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -341,18 +341,18 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         borderColor = Colors.red;
                         icon = Icons.cancel;
                       } else {
-                        backgroundColor = Colors.grey.shade50;
-                        textColor = Colors.grey.shade700;
-                                    borderColor = Colors.grey.shade300;
+                        backgroundColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+                        textColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
+                        borderColor = Theme.of(context).colorScheme.outline.withOpacity(0.5);
                       }
                     } else if (isSelected) {
-                      backgroundColor = const Color(0xFF1E3A8A).withOpacity(0.1);
-                      textColor = const Color(0xFF1E3A8A);
-                      borderColor = const Color(0xFF1E3A8A);
+                      backgroundColor = Theme.of(context).colorScheme.primary.withOpacity(0.1);
+                      textColor = Theme.of(context).colorScheme.primary;
+                      borderColor = Theme.of(context).colorScheme.primary;
                     } else {
-                      backgroundColor = Colors.white;
-                      textColor = Colors.black87;
-                      borderColor = Colors.grey.shade300;
+                      backgroundColor = Theme.of(context).colorScheme.surface;
+                      textColor = Theme.of(context).colorScheme.onSurface;
+                      borderColor = Theme.of(context).colorScheme.outline.withOpacity(0.5);
                     }
 
                     return Padding(
@@ -397,12 +397,12 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                     ),
                                   ),
                                   child: icon != null
-                                      ? Icon(icon, color: Colors.white, size: 20)
+                                      ? Icon(icon, color: Theme.of(context).colorScheme.onPrimary, size: 20)
                                       : isSelected
-                                          ? const Icon(
+                                          ? Icon(
                                               Icons.check,
                                               size: 18,
-                                              color: Colors.white,
+                                              color: Theme.of(context).colorScheme.onPrimary,
                                             )
                                           : Center(
                                               child: Text(
@@ -411,7 +411,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.bold,
                                                   color: isSelected
-                                                      ? Colors.white
+                                                      ? Theme.of(context).colorScheme.onPrimary
                                                       : borderColor,
                                                 ),
                                               ),
@@ -504,10 +504,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             Container(
               padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 20.0),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
+                color: Theme.of(context).colorScheme.surface.withOpacity(0.95),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -536,10 +536,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E3A8A),
-                      foregroundColor: Colors.white,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       elevation: 4,
-                      shadowColor: const Color(0xFF1E3A8A).withOpacity(0.4),
+                      shadowColor: Theme.of(context).colorScheme.primary.withOpacity(0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),

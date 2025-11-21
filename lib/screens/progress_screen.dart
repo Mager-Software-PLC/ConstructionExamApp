@@ -21,8 +21,8 @@ class ProgressScreen extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFF1E3A8A).withOpacity(0.05),
-                Colors.white,
+                Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                Theme.of(context).colorScheme.surface,
               ],
             ),
           ),
@@ -42,16 +42,16 @@ class ProgressScreen extends StatelessWidget {
         title: Text(l10n.translate('my_progress')),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.03),
-              Colors.white.withOpacity(0.95),
-            ],
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.03),
+                Theme.of(context).colorScheme.surface.withOpacity(0.95),
+              ],
+            ),
           ),
-        ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
@@ -61,15 +61,18 @@ class ProgressScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(28.0),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.primaryContainer,
+                    ],
                   ),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF1E3A8A).withOpacity(0.3),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -126,8 +129,8 @@ class ProgressScreen extends StatelessWidget {
                           child: CircularProgressIndicator(
                             value: progress.completionPercentage / 100,
                             strokeWidth: 16,
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                            backgroundColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.2),
+                            valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
                           ),
                         ),
                         Column(
@@ -233,11 +236,11 @@ class ProgressScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24.0),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -251,22 +254,22 @@ class ProgressScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E3A8A).withOpacity(0.1),
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.pie_chart_rounded,
-                            color: Color(0xFF1E3A8A),
+                            color: Theme.of(context).colorScheme.primary,
                             size: 24,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Text(
                           l10n.translate('answer_distribution'),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E3A8A),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ],
@@ -319,14 +322,14 @@ class ProgressScreen extends StatelessWidget {
                               Icon(
                                 Icons.bar_chart_rounded,
                                 size: 64,
-                                color: Colors.grey.shade300,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 l10n.translate('no_answers_yet'),
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.grey.shade600,
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                 ),
                               ),
                             ],
@@ -337,9 +340,9 @@ class ProgressScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildLegendItem(Colors.green, l10n.translate('correct')),
+                        _buildLegendItem(context, Colors.green, l10n.translate('correct')),
                         const SizedBox(width: 24),
-                        _buildLegendItem(Colors.red, l10n.translate('wrong')),
+                        _buildLegendItem(context, Colors.red, l10n.translate('wrong')),
                       ],
                     ),
                   ],
@@ -350,11 +353,11 @@ class ProgressScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24.0),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -389,14 +392,14 @@ class ProgressScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    _buildStatRow(l10n.translate('total_questions_attempted'), '${progress.attempted}', Icons.quiz_rounded),
+                    _buildStatRow(context, l10n.translate('total_questions_attempted'), '${progress.attempted}', Icons.quiz_rounded),
                     const Divider(height: 32),
-                    _buildStatRow(l10n.translate('correct_answers'), '${progress.correct}', Icons.check_circle_rounded, Colors.green),
+                    _buildStatRow(context, l10n.translate('correct_answers'), '${progress.correct}', Icons.check_circle_rounded, Colors.green),
                     const Divider(height: 32),
-                    _buildStatRow(l10n.translate('incorrect_answers'), '${progress.wrong}', Icons.cancel_rounded, Colors.red),
+                    _buildStatRow(context, l10n.translate('incorrect_answers'), '${progress.wrong}', Icons.cancel_rounded, Colors.red),
                     if (total > 0) ...[
                       const Divider(height: 32),
-                      _buildStatRow(l10n.translate('accuracy_rate'), '${correctPercentage.toStringAsFixed(1)}%', Icons.trending_up_rounded, Colors.blue),
+                      _buildStatRow(context, l10n.translate('accuracy_rate'), '${correctPercentage.toStringAsFixed(1)}%', Icons.trending_up_rounded, Colors.blue),
                     ],
                   ],
                 ),
@@ -462,7 +465,7 @@ class ProgressScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
+  Widget _buildLegendItem(BuildContext context, Color color, String label) {
     return Row(
       children: [
         Container(
@@ -476,50 +479,50 @@ class ProgressScreen extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF1E3A8A),
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatRow(String label, String value, IconData icon, [Color? color]) {
+  Widget _buildStatRow(BuildContext context, String label, String value, IconData icon, [Color? color]) {
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (color ?? const Color(0xFF1E3A8A)).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            color: color ?? const Color(0xFF1E3A8A),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color ?? const Color(0xFF1E3A8A),
-          ),
-        ),
+                          decoration: BoxDecoration(
+                            color: (color ?? Theme.of(context).colorScheme.primary).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            icon,
+                            color: color ?? Theme.of(context).colorScheme.primary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: color ?? Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
       ],
     );
   }

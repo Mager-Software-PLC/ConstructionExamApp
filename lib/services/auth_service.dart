@@ -24,12 +24,15 @@ class AuthService {
       );
 
       // Create user document in Firestore
+      // Check if this is the admin account
+      final isAdmin = email == 'admin@gmail.com';
       UserModel userModel = UserModel(
         uid: credential.user!.uid,
         fullName: fullName,
         email: email,
         phone: phone,
         progress: ProgressModel(),
+        isAdmin: isAdmin,
       );
 
       await _firestore

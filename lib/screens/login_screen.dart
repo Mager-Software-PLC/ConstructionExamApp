@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/app_initializer.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -36,6 +37,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success && mounted) {
+        // Mark language as selected after successful login
+        await AppInitializer.setLanguageSelected();
         Navigator.of(context).pushReplacementNamed('/home');
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -60,8 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.1),
-              Colors.white,
+              Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              Theme.of(context).colorScheme.surface,
             ],
           ),
         ),
@@ -77,22 +80,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E3A8A),
+                      color: Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.construction,
                       size: 60,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   ),
                   const SizedBox(height: 30),
                   Text(
                     l10n.translate('app_name'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E3A8A),
+                      color: Theme.of(context).colorScheme.primary,
                       letterSpacing: 0.5,
                     ),
                     textAlign: TextAlign.center,
@@ -102,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     l10n.translate('sign_in_to_continue'),
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.grey.shade600,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       fontWeight: FontWeight.w500,
                     ),
                     textAlign: TextAlign.center,
@@ -115,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: l10n.translate('email_address'),
                     hintText: l10n.translate('email_address'),
                     prefixIcon: const Icon(Icons.email_outlined),
-                    prefixIconColor: const Color(0xFF1E3A8A),
+                    prefixIconColor: Theme.of(context).colorScheme.primary,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -135,13 +138,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: l10n.translate('password'),
                     hintText: l10n.translate('password'),
                     prefixIcon: const Icon(Icons.lock_outlined),
-                    prefixIconColor: const Color(0xFF1E3A8A),
+                    prefixIconColor: Theme.of(context).colorScheme.primary,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       ),
                       onPressed: () {
                         setState(() {
@@ -170,13 +173,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           _rememberMe = value ?? true;
                         });
                       },
-                      activeColor: const Color(0xFF1E3A8A),
+                      activeColor: Theme.of(context).colorScheme.primary,
                     ),
                     Text(
                       l10n.translate('remember_me'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const Spacer(),
@@ -209,9 +212,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       child: Text(
                         l10n.translate('forgot_password'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF1E3A8A),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ),
@@ -223,28 +226,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: ElevatedButton(
                     onPressed: authProvider.isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E3A8A),
-                      foregroundColor: Colors.white,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     child: authProvider.isLoading
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 24,
                             width: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
                             ),
                           )
                         : Text(
                             l10n.translate('sign_in'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
+                              color: Theme.of(context).colorScheme.onPrimary,
                             ),
                           ),
                   ),

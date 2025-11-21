@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 // Uncomment after running: flutterfire configure
@@ -9,6 +10,7 @@ import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/question_provider.dart';
 import 'providers/progress_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/language_selection_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
@@ -17,6 +19,7 @@ import 'utils/app_initializer.dart';
 import 'widgets/session_manager.dart';
 import 'l10n/app_localizations.dart';
 import 'services/notification_service.dart';
+import 'services/admin_service.dart';
 
 // Background message handler (must be top-level)
 @pragma('vm:entry-point')
@@ -38,6 +41,9 @@ void main() async {
   // Initialize notification service
   await NotificationService().initialize();
   
+  // Initialize default admin account
+  await AdminService().initializeAdmin();
+  
   runApp(const MyApp());
 }
 
@@ -52,10 +58,12 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => QuestionProvider()),
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      child: Consumer<LanguageProvider>(
-        builder: (context, languageProvider, _) {
+      child: Consumer2<LanguageProvider, ThemeProvider>(
+        builder: (context, languageProvider, themeProvider, _) {
           return MaterialApp(
+            themeMode: themeProvider.themeMode,
             title: 'Construction Exam App',
             debugShowCheckedModeBanner: false,
             locale: languageProvider.locale,
@@ -124,6 +132,31 @@ class MyApp extends StatelessWidget {
                   borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              ),
+            ),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF1E3A8A),
+                brightness: Brightness.dark,
+              ),
+              appBarTheme: AppBarTheme(
+                centerTitle: true,
+                elevation: 0,
+                backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                foregroundColor: Colors.white,
+                titleTextStyle: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              cardTheme: CardThemeData(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
             ),
             home: const SplashScreen(),
@@ -198,23 +231,34 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
-    // First, check if user is already authenticated (skip language selection and login)
-    // Check Firebase auth directly first
-    final firebaseUser = authProvider.currentUser;
+    // Wait for AuthProvider to initialize and check session
+    await Future.delayed(const Duration(milliseconds: 2000));
+    
+    // Check multiple times with delays to ensure Firebase Auth has restored
+    User? firebaseUser;
+    for (int i = 0; i < 3; i++) {
+      firebaseUser = authProvider.currentUser;
+      if (firebaseUser != null) break;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
     
     if (firebaseUser != null) {
       // Firebase user exists - load user data and go to home
       await authProvider.loadUserData(firebaseUser.uid);
       if (mounted && authProvider.isAuthenticated) {
+        // Ensure session is saved for persistence
+        await authProvider.refreshSession();
+        // Skip language selection if user is authenticated
+        await AppInitializer.setLanguageSelected();
         Navigator.of(context).pushReplacementNamed('/home');
         return;
       }
     }
     
-    // Try to restore session
-    final sessionRestored = await authProvider.restoreSession();
-    if (sessionRestored && authProvider.isAuthenticated) {
-      // Session restored successfully - go to home
+    // Check if authProvider has already loaded user data
+    if (authProvider.isAuthenticated && authProvider.user != null) {
+      // User is already authenticated
+      await AppInitializer.setLanguageSelected();
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
         return;
@@ -248,8 +292,8 @@ class _SplashScreenState extends State<SplashScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.blue.shade700,
-              Colors.blue.shade400,
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.primaryContainer,
             ],
           ),
         ),
@@ -257,23 +301,23 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.construction,
                 size: 100,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onPrimary,
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'Construction Exam',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
               const SizedBox(height: 40),
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
               ),
             ],
           ),

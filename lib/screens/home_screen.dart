@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/question_provider.dart';
 import '../l10n/app_localizations.dart';
+import '../services/admin_service.dart';
 import 'questions_screen.dart';
 import 'certificate_screen.dart';
 
@@ -14,11 +15,23 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isAdmin = false;
+
   @override
   void initState() {
     super.initState();
     // Refresh session periodically
     _refreshSessionPeriodically();
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await AdminService().isCurrentUserAdmin();
+    if (mounted) {
+      setState(() {
+        _isAdmin = isAdmin;
+      });
+    }
   }
 
   void _refreshSessionPeriodically() {
@@ -72,8 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.03),
-              Colors.white.withOpacity(0.95),
+              Theme.of(context).colorScheme.primary.withOpacity(0.03),
+              Theme.of(context).colorScheme.surface.withOpacity(0.95),
             ],
           ),
         ),
@@ -85,15 +98,18 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(24.0),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.primaryContainer,
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF1E3A8A).withOpacity(0.3),
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -179,15 +195,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E3A8A).withOpacity(0.1),
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             '${questionProvider.totalQuestions}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E3A8A),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -198,11 +214,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       value: progress.completionPercentage / 100,
                       minHeight: 10,
                       borderRadius: BorderRadius.circular(5),
-                      backgroundColor: Colors.grey.shade300,
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         progress.completionPercentage >= 100
-                            ? Colors.green
-                            : Colors.blue,
+                            ? Theme.of(context).colorScheme.tertiary
+                            : Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -210,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       '${progress.completionPercentage.toStringAsFixed(1)}% Complete',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey.shade700,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
                     ),
                   ],
@@ -221,11 +237,15 @@ class _HomeScreenState extends State<HomeScreen> {
             if (canGenerateCertificate)
               Card(
                 elevation: 4,
-                color: hasPassed ? Colors.green.shade50 : Colors.blue.shade50,
+                color: hasPassed 
+                    ? Theme.of(context).colorScheme.tertiaryContainer.withOpacity(0.5)
+                    : Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
                   side: BorderSide(
-                    color: hasPassed ? Colors.green.shade300 : Colors.blue.shade300,
+                    color: hasPassed 
+                        ? Theme.of(context).colorScheme.tertiary
+                        : Theme.of(context).colorScheme.primary,
                     width: 2,
                   ),
                 ),
@@ -262,7 +282,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(
                           Icons.verified,
-                          color: hasPassed ? Colors.green.shade700 : Colors.blue.shade700,
+                          color: hasPassed 
+                              ? Theme.of(context).colorScheme.tertiary
+                              : Theme.of(context).colorScheme.primary,
                           size: 40,
                         ),
                         const SizedBox(width: 15),
@@ -277,7 +299,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: hasPassed ? Colors.green : Colors.blue,
+                                  color: hasPassed 
+                                      ? Theme.of(context).colorScheme.tertiary
+                                      : Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               if (!hasPassed)
@@ -285,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   l10n.translate('view_certificate'),
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.grey.shade600,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                   ),
                                 ),
                             ],
@@ -293,7 +317,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         Icon(
                           Icons.arrow_forward_ios,
-                          color: hasPassed ? Colors.green.shade700 : Colors.blue.shade700,
+                          color: hasPassed 
+                              ? Theme.of(context).colorScheme.tertiary
+                              : Theme.of(context).colorScheme.primary,
                           size: 20,
                         ),
                       ],
@@ -301,57 +327,63 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 30),
-            Container(
-              width: double.infinity,
-              height: 64,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF1E3A8A).withOpacity(0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
+            // Hide Start Exam button for admin users
+            if (!_isAdmin) ...[
+              const SizedBox(height: 30),
+              Container(
+                width: double.infinity,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.primaryContainer,
+                    ],
                   ),
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const QuestionsScreen(),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.quiz_outlined, color: Colors.white, size: 28),
-                    const SizedBox(width: 12),
-                    Text(
-                      l10n.translate('start_continue_exam'),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const QuestionsScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.quiz_outlined, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Text(
+                        l10n.translate('start_continue_exam'),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
+            ],
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(
@@ -413,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: Colors.grey.shade700,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
           ),
         ),
       ],

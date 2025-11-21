@@ -27,6 +27,10 @@
     native <methods>;
 }
 
+# Keep Play Core classes (for split APKs)
+-keep class com.google.android.play.core.** { *; }
+-dontwarn com.google.android.play.core.**
+
 # Keep Parcelables
 -keepclassmembers class * implements android.os.Parcelable {
     public static final android.os.Parcelable$Creator CREATOR;

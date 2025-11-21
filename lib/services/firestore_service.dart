@@ -141,5 +141,68 @@ class FirestoreService {
       throw Exception('Failed to update progress: $e');
     }
   }
+
+  // Admin: Add question
+  Future<String> addQuestion({
+    required String text,
+    required List<String> choices,
+    required int correctIndex,
+  }) async {
+    try {
+      final docRef = await _firestore.collection('questions').add({
+        'text': text,
+        'choices': choices,
+        'correctIndex': correctIndex,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (e) {
+      throw Exception('Failed to add question: $e');
+    }
+  }
+
+  // Admin: Update question
+  Future<void> updateQuestion({
+    required String questionId,
+    required String text,
+    required List<String> choices,
+    required int correctIndex,
+  }) async {
+    try {
+      await _firestore.collection('questions').doc(questionId).update({
+        'text': text,
+        'choices': choices,
+        'correctIndex': correctIndex,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update question: $e');
+    }
+  }
+
+  // Admin: Delete question
+  Future<void> deleteQuestion(String questionId) async {
+    try {
+      await _firestore.collection('questions').doc(questionId).delete();
+    } catch (e) {
+      throw Exception('Failed to delete question: $e');
+    }
+  }
+
+  // Admin: Get all users with their progress
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    try {
+      final snapshot = await _firestore.collection('users').get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'uid': doc.id,
+          ...data,
+        };
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to get users: $e');
+    }
+  }
 }
 

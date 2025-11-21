@@ -7,6 +7,7 @@ class UserModel {
   final String profilePictureUrl;
   final ProgressModel progress;
   final bool certificateIssued;
+  final bool isAdmin;
 
   UserModel({
     required this.uid,
@@ -17,6 +18,7 @@ class UserModel {
     this.profilePictureUrl = '',
     required this.progress,
     this.certificateIssued = false,
+    this.isAdmin = false,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String uid) {
@@ -29,6 +31,7 @@ class UserModel {
       profilePictureUrl: map['profilePictureUrl'] ?? '',
       progress: ProgressModel.fromMap(map['progress'] ?? {}),
       certificateIssued: map['certificateIssued'] ?? false,
+      isAdmin: map['isAdmin'] ?? false,
     );
   }
 
@@ -41,6 +44,7 @@ class UserModel {
       'profilePictureUrl': profilePictureUrl,
       'progress': progress.toMap(),
       'certificateIssued': certificateIssued,
+      'isAdmin': isAdmin,
     };
   }
 
@@ -52,6 +56,7 @@ class UserModel {
     String? profilePictureUrl,
     ProgressModel? progress,
     bool? certificateIssued,
+    bool? isAdmin,
   }) {
     return UserModel(
       uid: uid,
@@ -62,6 +67,7 @@ class UserModel {
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
       progress: progress ?? this.progress,
       certificateIssued: certificateIssued ?? this.certificateIssued,
+      isAdmin: isAdmin ?? this.isAdmin,
     );
   }
 }

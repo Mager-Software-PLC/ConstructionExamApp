@@ -5,7 +5,7 @@ class SessionService {
   static const String _sessionKey = 'user_session';
   static const String _sessionTimestampKey = 'session_timestamp';
   static const String _rememberMeKey = 'remember_me';
-  static const int _sessionTimeoutHours = 24 * 7; // 7 days default
+  static const int _sessionTimeoutHours = 24 * 30; // 30 days for persistent auth
 
   // Save session
   Future<void> saveSession(String userId, {bool rememberMe = true}) async {
@@ -26,16 +26,17 @@ class SessionService {
       return null;
     }
 
-    // Check if session is expired (only if remember me is false)
-    if (!rememberMe) {
-      final sessionTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      final now = DateTime.now();
-      final difference = now.difference(sessionTime);
+    // Check if session is expired
+    // If rememberMe is true, session persists indefinitely (until logout)
+    // If rememberMe is false, session expires after timeout
+    final sessionTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final now = DateTime.now();
+    final difference = now.difference(sessionTime);
 
-      if (difference.inHours > _sessionTimeoutHours) {
-        await clearSession();
-        return null;
-      }
+    // Only check expiration if rememberMe is false
+    if (!rememberMe && difference.inHours > _sessionTimeoutHours) {
+      await clearSession();
+      return null;
     }
 
     return userId;

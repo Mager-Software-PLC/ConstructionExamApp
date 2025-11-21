@@ -95,8 +95,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.1),
-              Colors.white,
+              Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              Theme.of(context).colorScheme.surface,
             ],
           ),
         ),
@@ -120,19 +120,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           icon: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
+                                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.arrow_back,
-                              color: Color(0xFF1E3A8A),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                           onPressed: () => Navigator.of(context).pop(),
@@ -143,13 +143,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E3A8A).withOpacity(0.1),
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           _emailSent ? Icons.mark_email_read : Icons.lock_reset,
                           size: 60,
-                          color: const Color(0xFF1E3A8A),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 30),
@@ -157,10 +157,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         _emailSent
                             ? l10n.translate('check_email')
                             : l10n.translate('forgot_password'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A8A),
+                          color: Theme.of(context).colorScheme.primary,
                           letterSpacing: 0.5,
                         ),
                         textAlign: TextAlign.center,
@@ -172,7 +172,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             : l10n.translate('enter_email_reset'),
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey.shade600,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
@@ -186,7 +186,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             labelText: l10n.translate('email_address'),
                             hintText: l10n.translate('email_address'),
                             prefixIcon: const Icon(Icons.email_outlined),
-                            prefixIconColor: const Color(0xFF1E3A8A),
+                            prefixIconColor: Theme.of(context).colorScheme.primary,
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
@@ -204,29 +204,30 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _sendPasswordReset,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E3A8A),
-                              foregroundColor: Colors.white,
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
                               elevation: 3,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: _isLoading
-                                ? const SizedBox(
+                                ? SizedBox(
                                     height: 24,
                                     width: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
                                       valueColor:
-                                          AlwaysStoppedAnimation<Color>(Colors.white),
+                                          AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
                                     ),
                                   )
                                 : Text(
                                     l10n.translate('send_reset_link'),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 0.5,
+                                      color: Theme.of(context).colorScheme.onPrimary,
                                     ),
                                   ),
                           ),
@@ -277,8 +278,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           child: ElevatedButton(
                             onPressed: () => Navigator.of(context).pop(),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E3A8A),
-                              foregroundColor: Colors.white,
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
                               elevation: 3,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -286,10 +287,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             ),
                             child: Text(
                               l10n.translate('back_to_login'),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.5,
+                                color: Theme.of(context).colorScheme.onPrimary,
                               ),
                             ),
                           ),

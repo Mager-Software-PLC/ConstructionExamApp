@@ -2,10 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/storage_service.dart';
 import '../l10n/app_localizations.dart';
 import 'certificate_screen.dart';
 import 'admin_import_screen.dart';
+import 'admin_dashboard_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -132,17 +134,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: Text(l10n.translate('profile')),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.cloud_upload),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const AdminImportScreen(),
-                ),
-              );
-            },
-            tooltip: l10n.translate('import_questions'),
-          ),
+          if (Provider.of<AuthProvider>(context).user?.isAdmin == true) ...[
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AdminDashboardScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Admin Dashboard',
+            ),
+            IconButton(
+              icon: const Icon(Icons.cloud_upload),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AdminImportScreen(),
+                  ),
+                );
+              },
+              tooltip: l10n.translate('import_questions'),
+            ),
+          ],
           if (!_isEditing)
             IconButton(
               icon: const Icon(Icons.edit),
@@ -167,8 +182,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.03),
-              Colors.white.withOpacity(0.95),
+              Theme.of(context).colorScheme.primary.withOpacity(0.03),
+              Theme.of(context).colorScheme.surface.withOpacity(0.95),
             ],
           ),
         ),
@@ -182,7 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 60,
-                    backgroundColor: Colors.grey.shade300,
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     backgroundImage: _selectedImage != null
                         ? FileImage(_selectedImage!) as ImageProvider
                         : (user.profilePictureUrl.isNotEmpty
@@ -198,10 +213,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       right: 0,
                       child: CircleAvatar(
                         radius: 20,
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         child: IconButton(
-                          icon: const Icon(Icons.camera_alt, size: 20),
-                          color: Colors.white,
+                          icon: Icon(Icons.camera_alt, size: 20),
+                          color: Theme.of(context).colorScheme.onPrimary,
                           onPressed: _pickImage,
                         ),
                       ),
@@ -268,14 +283,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Card(
                   elevation: 4,
                   color: user.progress.completionPercentage >= 70.0
-                      ? Colors.green.shade50
-                      : Colors.blue.shade50,
+                      ? Theme.of(context).colorScheme.tertiaryContainer.withOpacity(0.5)
+                      : Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                     side: BorderSide(
                       color: user.progress.completionPercentage >= 70.0
-                          ? Colors.green.shade300
-                          : Colors.blue.shade300,
+                          ? Theme.of(context).colorScheme.tertiary
+                          : Theme.of(context).colorScheme.primary,
                       width: 2,
                     ),
                   ),
@@ -313,8 +328,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Icon(
                             Icons.verified,
                             color: user.progress.completionPercentage >= 70.0
-                                ? Colors.green.shade700
-                                : Colors.blue.shade700,
+                                ? Theme.of(context).colorScheme.tertiary
+                                : Theme.of(context).colorScheme.primary,
                             size: 40,
                           ),
                           const SizedBox(width: 15),
@@ -330,16 +345,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                     color: user.progress.completionPercentage >= 70.0
-                                        ? Colors.green
-                                        : Colors.blue,
+                                        ? Theme.of(context).colorScheme.tertiary
+                                        : Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
                                   l10n.translate('tap_to_view_download'),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.grey,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                   ),
                                 ),
                               ],
@@ -348,19 +363,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Icon(
                             Icons.arrow_forward_ios,
                             color: user.progress.completionPercentage >= 70.0
-                                ? Colors.green.shade700
-                                : Colors.blue.shade700,
+                                ? Theme.of(context).colorScheme.tertiary
+                                : Theme.of(context).colorScheme.primary,
                             size: 20,
-                          ),
-                          Icon(
-                            Icons.arrow_forward_ios,
-                            color: Colors.green.shade700,
                           ),
                         ],
                       ),
                     ),
                   ),
                 ),
+              const SizedBox(height: 30),
+              // Theme Switcher (Adaptive)
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Consumer<ThemeProvider>(
+                  builder: (context, themeProvider, _) {
+                    return ExpansionTile(
+                      leading: Icon(
+                        themeProvider.themeMode == ThemeMode.system
+                            ? Icons.brightness_auto
+                            : themeProvider.isDarkMode
+                                ? Icons.dark_mode
+                                : Icons.light_mode,
+                      ),
+                      title: const Text('Theme'),
+                      subtitle: Text(
+                        themeProvider.themeMode == ThemeMode.system
+                            ? 'Adaptive (System)'
+                            : themeProvider.themeMode == ThemeMode.dark
+                                ? 'Dark Mode'
+                                : 'Light Mode',
+                      ),
+                      children: [
+                        RadioListTile<ThemeMode>(
+                          title: const Text('Adaptive (System)'),
+                          subtitle: const Text('Follows device theme'),
+                          value: ThemeMode.system,
+                          groupValue: themeProvider.themeMode,
+                          onChanged: (value) {
+                            if (value != null) {
+                              themeProvider.setThemeMode(value);
+                            }
+                          },
+                        ),
+                        RadioListTile<ThemeMode>(
+                          title: const Text('Light Mode'),
+                          value: ThemeMode.light,
+                          groupValue: themeProvider.themeMode,
+                          onChanged: (value) {
+                            if (value != null) {
+                              themeProvider.setThemeMode(value);
+                            }
+                          },
+                        ),
+                        RadioListTile<ThemeMode>(
+                          title: const Text('Dark Mode'),
+                          value: ThemeMode.dark,
+                          groupValue: themeProvider.themeMode,
+                          onChanged: (value) {
+                            if (value != null) {
+                              themeProvider.setThemeMode(value);
+                            }
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Logout Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    await authProvider.logout();
+                    if (mounted) {
+                      Navigator.of(context).pushReplacementNamed('/auth');
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: Text(l10n.translate('logout')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
