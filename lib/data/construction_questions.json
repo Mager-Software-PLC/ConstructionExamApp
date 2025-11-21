@@ -1,0 +1,313 @@
+[
+  {
+    "text": "What is the minimum required concrete strength for most construction projects?",
+    "choices": ["15 MPa", "20 MPa", "25 MPa", "30 MPa"],
+    "correctIndex": 2
+  },
+  {
+    "text": "What does the term 'rebar' refer to in construction?",
+    "choices": ["Reinforcing bar", "Rebuilding material", "Recycled barrier", "Reinforced beam"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard thickness of a typical concrete slab for residential construction?",
+    "choices": ["4 inches", "6 inches", "8 inches", "10 inches"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the primary purpose of a foundation in construction?",
+    "choices": ["Aesthetic appeal", "Load distribution", "Waterproofing", "Insulation"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What does OSHA stand for in construction safety?",
+    "choices": ["Occupational Safety and Health Administration", "Organization for Safety and Health", "Official Safety and Health Agency", "Occupational Standards and Health Administration"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the recommended slope for roof drainage?",
+    "choices": ["1/4 inch per foot", "1/2 inch per foot", "1 inch per foot", "2 inches per foot"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What type of cement is most commonly used in general construction?",
+    "choices": ["Type I - Ordinary Portland Cement", "Type II - Modified Portland Cement", "Type III - High Early Strength", "Type V - Sulfate Resistant"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum width required for a standard residential doorway?",
+    "choices": ["28 inches", "30 inches", "32 inches", "36 inches"],
+    "correctIndex": 2
+  },
+  {
+    "text": "What does 'PSI' stand for in concrete strength measurement?",
+    "choices": ["Pounds per Square Inch", "Pressure Strength Index", "Pound Strength Indicator", "Pressure System Indicator"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard spacing for floor joists in residential construction?",
+    "choices": ["12 inches on center", "16 inches on center", "20 inches on center", "24 inches on center"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the primary component of concrete?",
+    "choices": ["Cement", "Water", "Aggregate", "All of the above"],
+    "correctIndex": 3
+  },
+  {
+    "text": "What is the purpose of a vapor barrier in construction?",
+    "choices": ["Prevent moisture migration", "Increase insulation", "Reduce noise", "Improve aesthetics"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum ceiling height required for habitable rooms?",
+    "choices": ["7 feet", "7.5 feet", "8 feet", "9 feet"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What type of foundation is best for areas with expansive soil?",
+    "choices": ["Slab foundation", "Pier and beam foundation", "Basement foundation", "Crawl space foundation"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard thickness of drywall used in residential construction?",
+    "choices": ["1/4 inch", "1/2 inch", "5/8 inch", "3/4 inch"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What does R-value measure in insulation?",
+    "choices": ["Thermal resistance", "Moisture resistance", "Sound absorption", "Fire resistance"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required clearance for electrical panels?",
+    "choices": ["24 inches", "30 inches", "36 inches", "42 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of rebar in concrete?",
+    "choices": ["Increase tensile strength", "Reduce cost", "Improve appearance", "Speed up curing"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard width of a residential hallway?",
+    "choices": ["30 inches", "36 inches", "42 inches", "48 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the recommended concrete slump for most construction applications?",
+    "choices": ["2-4 inches", "4-6 inches", "6-8 inches", "8-10 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the primary function of a lintel in construction?",
+    "choices": ["Support loads above openings", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete driveway?",
+    "choices": ["3 inches", "4 inches", "5 inches", "6 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What does 'on center' mean in construction measurements?",
+    "choices": ["From edge to edge", "From center to center", "From outside to outside", "From inside to inside"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard height for residential countertops?",
+    "choices": ["32 inches", "34 inches", "36 inches", "38 inches"],
+    "correctIndex": 2
+  },
+  {
+    "text": "What is the purpose of expansion joints in concrete?",
+    "choices": ["Allow for thermal expansion", "Improve strength", "Reduce cost", "Increase speed"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required R-value for attic insulation in most climates?",
+    "choices": ["R-19", "R-30", "R-38", "R-49"],
+    "correctIndex": 2
+  },
+  {
+    "text": "What is the standard spacing for wall studs in residential construction?",
+    "choices": ["12 inches on center", "16 inches on center", "20 inches on center", "24 inches on center"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the primary purpose of a footing in foundation construction?",
+    "choices": ["Distribute building load", "Prevent water entry", "Provide insulation", "Improve aesthetics"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete sidewalk?",
+    "choices": ["3 inches", "4 inches", "5 inches", "6 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What does 'curing' mean in concrete construction?",
+    "choices": ["Maintaining moisture for strength development", "Removing excess water", "Adding chemicals", "Polishing surface"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard height for residential door frames?",
+    "choices": ["78 inches", "80 inches", "82 inches", "84 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of a sill plate in construction?",
+    "choices": ["Anchor wall framing to foundation", "Decorative trim", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete basement floor?",
+    "choices": ["3 inches", "4 inches", "5 inches", "6 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard width of a residential stair tread?",
+    "choices": ["9 inches", "10 inches", "11 inches", "12 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of flashing in construction?",
+    "choices": ["Prevent water penetration", "Decorative element", "Structural support", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required headroom for stairs?",
+    "choices": ["6 feet 6 inches", "6 feet 8 inches", "7 feet", "7 feet 2 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard thickness of exterior sheathing?",
+    "choices": ["1/4 inch", "1/2 inch", "5/8 inch", "3/4 inch"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of a header in construction?",
+    "choices": ["Support loads above openings", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete patio?",
+    "choices": ["3 inches", "4 inches", "5 inches", "6 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard height for residential handrails?",
+    "choices": ["32 inches", "34 inches", "36 inches", "38 inches"],
+    "correctIndex": 2
+  },
+  {
+    "text": "What is the purpose of a weep hole in masonry construction?",
+    "choices": ["Allow water drainage", "Decorative element", "Structural support", "Ventilation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete retaining wall?",
+    "choices": ["6 inches", "8 inches", "10 inches", "12 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard spacing for roof rafters?",
+    "choices": ["16 inches on center", "20 inches on center", "24 inches on center", "32 inches on center"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the purpose of a vapor barrier in wall construction?",
+    "choices": ["Prevent moisture migration", "Increase insulation", "Reduce noise", "Improve strength"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete foundation wall?",
+    "choices": ["6 inches", "8 inches", "10 inches", "12 inches"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard height for residential window sills?",
+    "choices": ["24 inches", "28 inches", "32 inches", "36 inches"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the purpose of a tie beam in construction?",
+    "choices": ["Connect columns horizontally", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete floor slab?",
+    "choices": ["3 inches", "4 inches", "5 inches", "6 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard width of a residential stair riser?",
+    "choices": ["6 inches", "7 inches", "8 inches", "9 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of a plumb line in construction?",
+    "choices": ["Ensure vertical alignment", "Measure distance", "Level surfaces", "Mark angles"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete column?",
+    "choices": ["8 inches", "10 inches", "12 inches", "14 inches"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard spacing for ceiling joists?",
+    "choices": ["16 inches on center", "20 inches on center", "24 inches on center", "32 inches on center"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the purpose of a beam in construction?",
+    "choices": ["Support horizontal loads", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete bridge deck?",
+    "choices": ["6 inches", "8 inches", "10 inches", "12 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the standard height for residential baseboards?",
+    "choices": ["3 inches", "4 inches", "5 inches", "6 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of a column in construction?",
+    "choices": ["Support vertical loads", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete parking lot?",
+    "choices": ["4 inches", "5 inches", "6 inches", "8 inches"],
+    "correctIndex": 2
+  },
+  {
+    "text": "What is the standard spacing for fence posts?",
+    "choices": ["6 feet", "8 feet", "10 feet", "12 feet"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of a truss in construction?",
+    "choices": ["Support roof loads efficiently", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the minimum required thickness for a concrete wall?",
+    "choices": ["6 inches", "8 inches", "10 inches", "12 inches"],
+    "correctIndex": 0
+  },
+  {
+    "text": "What is the standard height for residential window headers?",
+    "choices": ["78 inches", "80 inches", "82 inches", "84 inches"],
+    "correctIndex": 1
+  },
+  {
+    "text": "What is the purpose of a girder in construction?",
+    "choices": ["Support heavy loads", "Decorative element", "Waterproofing", "Insulation"],
+    "correctIndex": 0
+  }
+]
+

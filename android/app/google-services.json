@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "455624873438",
+    "project_id": "photo-share-3e273",
+    "storage_bucket": "photo-share-3e273.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:455624873438:android:6802b7ef4e4817549eb94f",
+        "android_client_info": {
+          "package_name": "com.constructionexamapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCacacdZP5CrR_SnkqWlbJxJz_VqFhcXg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
