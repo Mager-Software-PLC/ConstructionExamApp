@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../models/user_model.dart';
+import '../models/api_models.dart';
 import '../l10n/app_localizations.dart';
 
 class CertificateScreen extends StatefulWidget {
-  final UserModel user;
+  final User user;
+  final double progressPercentage;
 
-  const CertificateScreen({super.key, required this.user});
+  const CertificateScreen({super.key, required this.user, required this.progressPercentage});
 
   @override
   State<CertificateScreen> createState() => _CertificateScreenState();
@@ -170,7 +171,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                           ),
                         ),
                         child: pw.Text(
-                          widget.user.fullName.toUpperCase(),
+                          widget.user.name.toUpperCase(),
                           style: pw.TextStyle(
                             fontSize: 32,
                             fontWeight: pw.FontWeight.bold,
@@ -201,7 +202,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                       ),
                       pw.SizedBox(height: 20),
                       pw.Text(
-                        '${l10n.translate('with_completion_rate')} ${widget.user.progress.completionPercentage.toStringAsFixed(1)}%',
+                        '${l10n.translate('with_completion_rate')} ${widget.progressPercentage.toStringAsFixed(1)}%',
                         style: pw.TextStyle(
                           fontSize: 16,
                           color: PdfColors.grey700,
@@ -215,7 +216,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                           pw.Column(
                             children: [
                               pw.Text(
-                                '${widget.user.progress.correct}',
+                                '0', // TODO: Get from progress data
                                 style: pw.TextStyle(
                                   fontSize: 24,
                                   fontWeight: pw.FontWeight.bold,
@@ -239,7 +240,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                           pw.Column(
                             children: [
                               pw.Text(
-                                '${widget.user.progress.attempted}',
+                                '0', // TODO: Get from progress data
                                 style: pw.TextStyle(
                                   fontSize: 24,
                                   fontWeight: pw.FontWeight.bold,
@@ -301,7 +302,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                       pw.SizedBox(height: 20),
                       // Certificate ID
                       pw.Text(
-                        '${l10n.translate('certificate_id')}: ${widget.user.uid.substring(0, 8).toUpperCase()}',
+                        '${l10n.translate('certificate_id')}: ${widget.user.id.substring(0, 8).toUpperCase()}',
                         style: pw.TextStyle(
                           fontSize: 10,
                           color: PdfColors.grey600,
@@ -332,7 +333,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
       // Use printing package to share/save PDF
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'certificate_${widget.user.uid.substring(0, 8)}.pdf',
+        filename: 'certificate_${widget.user.id.substring(0, 8)}.pdf',
       );
 
       if (mounted) {
@@ -400,6 +401,76 @@ class _CertificateScreenState extends State<CertificateScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    
+    // Check if user has scored 50% or above
+    final hasPassed = widget.progressPercentage >= 50.0;
+    
+    if (!hasPassed) {
+      // User hasn't passed - show message
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.translate('certificate')),
+        ),
+        body: Container(
+          color: Theme.of(context).colorScheme.surface,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 64,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Certificate Not Available',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'You need to score at least 50% to generate a certificate.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your current score: ${widget.progressPercentage.toStringAsFixed(1)}%',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Go Back'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.translate('certificate')),
@@ -423,16 +494,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.05),
-              Theme.of(context).colorScheme.surface.withOpacity(0.95),
-            ],
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
@@ -450,7 +512,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.shadow,
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -500,7 +562,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                         l10n.translate('this_is_to_certify'),
                         style: TextStyle(
                           fontSize: 18,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -518,7 +580,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                         ),
                       ),
                       child: Text(
-                        widget.user.fullName.toUpperCase(),
+                        widget.user.name.toUpperCase(),
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -549,10 +611,10 @@ class _CertificateScreenState extends State<CertificateScreen> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      '${l10n.translate('with_completion_rate')} ${widget.user.progress.completionPercentage.toStringAsFixed(1)}%',
+                      '${l10n.translate('with_completion_rate')} ${widget.progressPercentage.toStringAsFixed(1)}%',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 50),
@@ -563,7 +625,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                         Column(
                           children: [
                             Text(
-                              '${widget.user.progress.correct}',
+                              '0', // TODO: Get from progress data
                               style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
@@ -574,7 +636,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                               l10n.translate('correct'),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ],
@@ -582,12 +644,12 @@ class _CertificateScreenState extends State<CertificateScreen> {
                         Container(
                           width: 1,
                           height: 50,
-                          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                          color: Theme.of(context).colorScheme.outline,
                         ),
                         Column(
                           children: [
                             Text(
-                              '${widget.user.progress.attempted}',
+                              '0', // TODO: Get from progress data
                               style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
@@ -598,7 +660,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                               l10n.translate('attempted'),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ],
@@ -634,8 +696,8 @@ class _CertificateScreenState extends State<CertificateScreen> {
                       icon: const Icon(Icons.print),
                       label: Text(l10n.translate('print')),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -675,10 +737,10 @@ class _CertificateScreenState extends State<CertificateScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 child: Row(

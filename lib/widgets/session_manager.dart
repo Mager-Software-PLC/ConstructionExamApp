@@ -37,7 +37,7 @@ class _SessionManagerState extends State<SessionManager> {
     if (authProvider.isAuthenticated) {
       final hasValidSession = await _sessionService.hasValidSession();
       
-      if (!hasValidSession && authProvider.currentUser == null) {
+      if (!hasValidSession && authProvider.user == null) {
         // Session expired, logout user
         if (mounted) {
           await authProvider.logout();

@@ -37,14 +37,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   
-  # Firebase
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
-  cloud_firestore: ^5.4.4
-  firebase_storage: ^12.3.2
-  firebase_messaging: ^15.1.3
-  
-  # Notifications
+  # Notifications (local only, no Firebase)
   flutter_local_notifications: ^18.0.1
   
   # State Management
@@ -52,9 +45,13 @@ dependencies:
   
   # Local Storage
   shared_preferences: ^2.2.3
+  flutter_secure_storage: ^9.2.2
   
   # Image Picker
   image_picker: ^1.1.2
+  
+  # File Picker
+  file_picker: ^8.1.4
   
   # Charts
   fl_chart: ^0.69.0
@@ -68,6 +65,9 @@ dependencies:
   
   # Share
   share_plus: ^10.1.2
+  
+  # HTTP Client
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

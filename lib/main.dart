@@ -1,48 +1,34 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-// Uncomment after running: flutterfire configure
-// import 'firebase_options.dart';
 import 'providers/language_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/question_provider.dart';
 import 'providers/progress_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/message_provider.dart';
+import 'providers/category_provider.dart';
 import 'screens/language_selection_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
-import 'screens/admin_import_screen.dart';
 import 'utils/app_initializer.dart';
 import 'widgets/session_manager.dart';
 import 'l10n/app_localizations.dart';
 import 'services/notification_service.dart';
-import 'services/admin_service.dart';
-
-// Background message handler (must be top-level)
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('Handling background message: ${message.messageId}');
-}
+import 'services/sound_service.dart';
+import 'services/session_service.dart';
+import 'services/backend_auth_service.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase
-  // After running 'flutterfire configure', uncomment the line below:
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await Firebase.initializeApp();
-  
-  // Set up background message handler
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  
-  // Initialize notification service
+  // Initialize notification service (local notifications only)
   await NotificationService().initialize();
   
-  // Initialize default admin account
-  await AdminService().initializeAdmin();
+  // Initialize sound service
+  await SoundService().initialize();
   
   runApp(const MyApp());
 }
@@ -59,6 +45,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => QuestionProvider()),
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => MessageProvider()),
+        ChangeNotifierProvider(create: (_) => CategoryProvider()),
       ],
       child: Consumer2<LanguageProvider, ThemeProvider>(
         builder: (context, languageProvider, themeProvider, _) {
@@ -70,6 +58,8 @@ class MyApp extends StatelessWidget {
             supportedLocales: const [
               Locale('en', ''),
               Locale('am', ''),
+              Locale('om', ''),
+              Locale('ti', ''),
               Locale('ar', ''),
             ],
             localizationsDelegates: const [
@@ -78,87 +68,8 @@ class MyApp extends StatelessWidget {
               GlobalCupertinoLocalizations.delegate,
               AppLocalizations.delegate,
             ],
-            theme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF1E3A8A), // Professional blue
-                brightness: Brightness.light,
-              ),
-              appBarTheme: AppBarTheme(
-                centerTitle: true,
-                elevation: 0,
-                backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
-                foregroundColor: Colors.white,
-                titleTextStyle: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                systemOverlayStyle: null,
-              ),
-              cardTheme: CardThemeData(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              inputDecorationTheme: InputDecorationTheme(
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              ),
-            ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF1E3A8A),
-                brightness: Brightness.dark,
-              ),
-              appBarTheme: AppBarTheme(
-                centerTitle: true,
-                elevation: 0,
-                backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
-                foregroundColor: Colors.white,
-                titleTextStyle: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              cardTheme: CardThemeData(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              ),
-            ),
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
             home: const SplashScreen(),
             onGenerateRoute: (RouteSettings settings) {
               WidgetBuilder? builder;
@@ -173,9 +84,6 @@ class MyApp extends StatelessWidget {
                   builder = (context) => const SessionManager(
                         child: MainNavigation(),
                       );
-                  break;
-                case '/admin/import':
-                  builder = (context) => const AdminImportScreen();
                   break;
                 default:
                   return null;
@@ -225,47 +133,93 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkFirstLaunch() async {
-    await Future.delayed(const Duration(seconds: 1));
+    // Minimal delay for UI smoothness
+    await Future.delayed(const Duration(milliseconds: 200));
     
     if (!mounted) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final sessionService = SessionService();
+    final backendAuthService = BackendAuthService();
     
-    // Wait for AuthProvider to initialize and check session
-    await Future.delayed(const Duration(milliseconds: 2000));
+    // Check if token exists in persistent storage
+    final hasToken = await backendAuthService.isLoggedIn();
     
-    // Check multiple times with delays to ensure Firebase Auth has restored
-    User? firebaseUser;
-    for (int i = 0; i < 3; i++) {
-      firebaseUser = authProvider.currentUser;
-      if (firebaseUser != null) break;
-      await Future.delayed(const Duration(milliseconds: 500));
-    }
-    
-    if (firebaseUser != null) {
-      // Firebase user exists - load user data and go to home
-      await authProvider.loadUserData(firebaseUser.uid);
-      if (mounted && authProvider.isAuthenticated) {
-        // Ensure session is saved for persistence
-        await authProvider.refreshSession();
-        // Skip language selection if user is authenticated
-        await AppInitializer.setLanguageSelected();
-        Navigator.of(context).pushReplacementNamed('/home');
-        return;
+    if (hasToken) {
+      debugPrint('Token found in storage, attempting auto-login...');
+      try {
+        // Wait for AuthProvider to initialize
+        await authProvider.waitForInitialization().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            debugPrint('AuthProvider initialization timeout - continuing');
+          },
+        );
+        
+        // Try to load user from token
+        await authProvider.loadUserFromToken();
+        if (authProvider.isAuthenticated && authProvider.user != null && mounted) {
+          debugPrint('Auto-login successful: ${authProvider.user!.id}');
+          await AppInitializer.setLanguageSelected();
+          if (mounted) {
+            Navigator.of(context).pushReplacementNamed('/home');
+          }
+          return;
+        } else {
+          // Token is invalid, clear it
+          debugPrint('Token invalid, clearing storage');
+          await backendAuthService.logout();
+        }
+      } catch (e) {
+        debugPrint('Auto-login failed: $e');
+        // Clear invalid token
+        await backendAuthService.logout();
       }
     }
     
-    // Check if authProvider has already loaded user data
+    // Wait for AuthProvider to initialize
+    try {
+      await authProvider.waitForInitialization().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          debugPrint('AuthProvider initialization timeout - continuing');
+        },
+      );
+    } catch (e) {
+      debugPrint('Error waiting for initialization: $e');
+    }
+    
+    // Check if user is authenticated after initialization
     if (authProvider.isAuthenticated && authProvider.user != null) {
-      // User is already authenticated
-      await AppInitializer.setLanguageSelected();
+      debugPrint('User authenticated: ${authProvider.user!.id}');
       if (mounted) {
+        await authProvider.refreshSession();
+        await AppInitializer.setLanguageSelected();
         Navigator.of(context).pushReplacementNamed('/home');
-        return;
+      }
+      return;
+    }
+    
+    // Check saved session
+    final savedSessionId = await sessionService.getSession();
+    if (savedSessionId != null) {
+      debugPrint('Found saved session: $savedSessionId');
+      try {
+        await authProvider.loadUserFromSession(savedSessionId);
+        if (authProvider.isAuthenticated && authProvider.user != null && mounted) {
+          await authProvider.refreshSession();
+          await AppInitializer.setLanguageSelected();
+          Navigator.of(context).pushReplacementNamed('/home');
+          return;
+        }
+      } catch (e) {
+        debugPrint('Failed to load user from saved session: $e');
       }
     }
     
     // User is not authenticated - check if language selection is needed
+    if (!mounted) return;
+    
     final isFirstLaunch = await AppInitializer.isFirstLaunch();
     final isLanguageSelected = await AppInitializer.isLanguageSelected();
     
@@ -288,36 +242,53 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primaryContainer,
-            ],
-          ),
+          color: Theme.of(context).colorScheme.surface,
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.construction,
-                size: 100,
-                color: Theme.of(context).colorScheme.onPrimary,
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.primary,
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.construction,
+                  size: 80,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 32),
               Text(
                 'Construction Exam',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                 ),
               ),
               const SizedBox(height: 40),
               CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onPrimary),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).colorScheme.primary,
+                ),
               ),
             ],
           ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/firestore_service.dart';
-import '../models/user_model.dart';
+import '../services/api_service.dart';
+import '../models/api_models.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -10,8 +10,8 @@ class AdminUsersScreen extends StatefulWidget {
 }
 
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
-  List<Map<String, dynamic>> _users = [];
+  final ApiService _apiService = ApiService();
+  List<User> _users = [];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -28,22 +28,107 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     });
 
     try {
-      final allUsers = await _firestoreService.getAllUsers();
-      // Filter out admin users from the list
-      final regularUsers = allUsers.where((user) {
-        final isAdmin = user['isAdmin'] ?? false;
-        return !isAdmin; // Only include non-admin users
-      }).toList();
-      
+      // TODO: Implement get all users via backend API
+      // For now, show empty list
+      // Note: Admin users endpoint needs to be implemented in backend
       setState(() {
-        _users = regularUsers;
+        _users = [];
         _isLoading = false;
+        _errorMessage = 'Users list feature not yet implemented in backend API';
       });
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _resetExam(String userId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Exam'),
+        content: const Text('This will allow the user to retake the exam. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // TODO: Implement reset exam via backend API
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reset exam feature not yet implemented in backend API'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _clearAnswers(String userId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Answers'),
+        content: const Text('This will delete all answers and reset progress. This action cannot be undone. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // TODO: Implement clear answers via backend API
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Clear answers feature not yet implemented in backend API'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -117,10 +202,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               child: ListView.builder(
                 itemCount: _users.length,
                 itemBuilder: (context, index) {
-                  final userData = _users[index];
-                  final isAdmin = userData['isAdmin'] ?? false;
-                  final progress = userData['progress'] ?? {};
-                  final progressModel = ProgressModel.fromMap(progress);
+                  final user = _users[index];
+                  // TODO: Get progress data from API
+                  final progressPercentage = user.progress;
+                  final isAdmin = false; // TODO: Check admin status via API
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -130,7 +215,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             ? Theme.of(context).colorScheme.secondary
                             : Theme.of(context).colorScheme.primary,
                         child: Text(
-                          userData['fullName']?[0]?.toUpperCase() ?? 'U',
+                          user.name[0].toUpperCase(),
                           style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
                         ),
                       ),
@@ -138,11 +223,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              userData['fullName'] ?? 'Unknown',
+                              user.name,
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ),
-                          if (progressModel.completionPercentage >= 70)
+                          if (progressPercentage >= 50)
                             Container(
                               margin: const EdgeInsets.only(left: 8),
                               padding: const EdgeInsets.symmetric(
@@ -174,41 +259,21 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(userData['email'] ?? ''),
+                          Text(user.email),
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              if (isAdmin)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 8),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    'ADMIN',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                    ),
-                                  ),
-                                ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+                                  color: Theme.of(context).colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  '${progressModel.completionPercentage.toStringAsFixed(1)}% Complete',
+                                  '${progressPercentage.toStringAsFixed(1)}% Complete',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
@@ -230,40 +295,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                               const SizedBox(height: 8),
                               _buildStatRow(
                                 'Phone',
-                                userData['phone'] ?? 'N/A',
+                                user.phone,
                                 Icons.phone,
                               ),
                               const SizedBox(height: 8),
                               _buildStatRow(
-                                'Attempted',
-                                '${progressModel.attempted}',
-                                Icons.check_circle_outline,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildStatRow(
-                                'Correct',
-                                '${progressModel.correct}',
-                                Icons.check_circle,
-                                Colors.green,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildStatRow(
-                                'Wrong',
-                                '${progressModel.wrong}',
-                                Icons.cancel,
-                                Colors.red,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildStatRow(
-                                'Completion',
-                                '${progressModel.completionPercentage.toStringAsFixed(1)}%',
+                                'Progress',
+                                '${progressPercentage.toStringAsFixed(1)}%',
                                 Icons.percent,
-                                progressModel.completionPercentage >= 70
+                                progressPercentage >= 70
                                     ? Colors.green
                                     : Colors.orange,
                               ),
                               const SizedBox(height: 8),
-                              if (progressModel.completionPercentage >= 70)
+                              if (progressPercentage >= 50)
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
@@ -285,6 +330,36 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                     ],
                                   ),
                                 ),
+                              const SizedBox(height: 16),
+                              const Divider(),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _resetExam(user.id),
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Reset Exam'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _clearAnswers(user.id),
+                                      icon: const Icon(Icons.delete_outline),
+                                      label: const Text('Clear All'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -308,7 +383,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           '$label: ',
           style: TextStyle(
             fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         Text(

@@ -31,9 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.login(
-        email: _emailController.text.trim(),
+        emailOrPhone: _emailController.text.trim(),
         password: _passwordController.text,
-        rememberMe: _rememberMe,
       );
 
       if (success && mounted) {
@@ -58,16 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              Theme.of(context).colorScheme.surface,
-            ],
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -105,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     l10n.translate('sign_in_to_continue'),
                     style: TextStyle(
                       fontSize: 16,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w500,
                     ),
                     textAlign: TextAlign.center,
@@ -144,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         _obscurePassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                       onPressed: () {
                         setState(() {
@@ -226,8 +216,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: ElevatedButton(
                     onPressed: authProvider.isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                      foregroundColor: Colors.white,
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

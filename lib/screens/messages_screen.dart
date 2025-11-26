@@ -1,0 +1,1109 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/message_provider.dart';
+import '../providers/auth_provider.dart';
+import '../models/api_models.dart' hide Material;
+import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart';
+import 'chat_screen.dart';
+
+class MessagesScreen extends StatefulWidget {
+  const MessagesScreen({super.key});
+
+  @override
+  State<MessagesScreen> createState() => _MessagesScreenState();
+}
+
+class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  Conversation? _selectedConversation;
+  final ScrollController _conversationsScrollController = ScrollController();
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _messagesScrollController = ScrollController();
+  bool _isSending = false;
+  final FocusNode _messageFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+      try {
+        await messageProvider.loadConversations();
+        // Set up periodic refresh to check for new messages
+        _startMessagePolling();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error loading conversations: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  Timer? _pollingTimer;
+
+  void _startMessagePolling() {
+    // Poll for new messages every 10 seconds
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+      
+      // Reload conversations to get latest messages
+      messageProvider.loadConversations().then((_) {
+        // Check for new messages in current conversation
+        if (_selectedConversation != null) {
+          messageProvider.loadMessages(_selectedConversation!.id, refresh: false);
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    _messageController.dispose();
+    _conversationsScrollController.dispose();
+    _messagesScrollController.dispose();
+    _messageFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void dispose() {
+    _conversationsScrollController.dispose();
+    _messageController.dispose();
+    _messagesScrollController.dispose();
+    _messageFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_messagesScrollController.hasClients) {
+        _messagesScrollController.animateTo(
+          _messagesScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _selectConversation(Conversation conversation) async {
+    setState(() {
+      _selectedConversation = conversation;
+    });
+
+    final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+    try {
+      await messageProvider.loadMessages(conversation.id, refresh: true);
+      await messageProvider.markAsRead(conversation.id);
+      _scrollToBottom();
+      
+      // Listen for new messages in this conversation
+      _listenForNewMessages(conversation.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading messages: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _listenForNewMessages(String conversationId) {
+    // This will be called when new messages arrive
+    // The message provider will handle notifications and sounds
+  }
+
+  Future<void> _createAndSelectConversation() async {
+    final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    if (!authProvider.isAuthenticated || authProvider.user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to start a conversation'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      final conversation = await messageProvider.createConversation();
+      
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (conversation != null && mounted) {
+        final isWideScreen = MediaQuery.of(context).size.width > 600;
+        if (isWideScreen) {
+          _selectConversation(conversation);
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(conversation: conversation),
+            ),
+          );
+        }
+      } else if (mounted && messageProvider.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(messageProvider.errorMessage!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Login',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).pushNamed('/auth');
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create conversation: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    if (_selectedConversation == null) return;
+    
+    final content = _messageController.text.trim();
+    if (content.isEmpty || _isSending) return;
+
+    setState(() {
+      _isSending = true;
+    });
+
+    final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+    final success = await messageProvider.sendMessage(
+      conversationId: _selectedConversation!.id,
+      content: content,
+    );
+
+    if (success) {
+      _messageController.clear();
+      _scrollToBottom();
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              messageProvider.errorMessage ?? 'Failed to send message',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isSending = false;
+      });
+    }
+  }
+
+  String _formatDateTime(DateTime? dateTime) {
+    if (dateTime == null) return '';
+    
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays == 0) {
+      final hour = dateTime.hour;
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      return '$displayHour:$minute $period';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[dateTime.weekday - 1];
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+  }
+
+  String _formatMessageTime(DateTime? dateTime) {
+    if (dateTime == null) return '';
+    
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays == 0) {
+      final hour = dateTime.hour;
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      return '$displayHour:$minute $period';
+    } else {
+      final month = dateTime.month.toString().padLeft(2, '0');
+      final day = dateTime.day.toString().padLeft(2, '0');
+      final hour = dateTime.hour;
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      return '$month/$day $displayHour:$minute $period';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final l10n = AppLocalizations.of(context)!;
+    final messageProvider = Provider.of<MessageProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+    final currentUserId = authProvider.user?.id ?? '';
+    
+    final isWideScreen = MediaQuery.of(context).size.width > 600;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    if (!isWideScreen) {
+      if (_selectedConversation == null) {
+        return _buildConversationsList(context, l10n, messageProvider, isWideScreen);
+      } else {
+        return _buildChatView(context, l10n, messageProvider, currentUserId, isWideScreen, screenHeight);
+      }
+    }
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              l10n.translate('messages'),
+              style: AppTypography.titleLarge.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'New conversation',
+            onPressed: _createAndSelectConversation,
+          ),
+        ],
+      ),
+      body: Row(
+        children: [
+          Container(
+            width: 350,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                right: BorderSide(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: _buildConversationsList(context, l10n, messageProvider, isWideScreen),
+          ),
+          Expanded(
+            child: _buildChatView(context, l10n, messageProvider, currentUserId, isWideScreen, screenHeight),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversationsList(
+    BuildContext context,
+    AppLocalizations l10n,
+    MessageProvider messageProvider,
+    bool isWideScreen,
+  ) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: isWideScreen ? null : AppBar(
+        elevation: 0,
+        title: Text(
+          l10n.translate('messages'),
+          style: AppTypography.titleLarge.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'New conversation',
+            onPressed: _createAndSelectConversation,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => messageProvider.loadConversations(),
+        child: messageProvider.isLoading && messageProvider.conversations.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : messageProvider.conversations.isEmpty
+                ? _buildEmptyConversationsState(context, l10n)
+                : ListView.builder(
+                    controller: _conversationsScrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: messageProvider.conversations.length,
+                    itemBuilder: (context, index) {
+                      final conversation = messageProvider.conversations[index];
+                      final hasUnread = conversation.unreadCount > 0;
+                      final isSelected = _selectedConversation?.id == conversation.id;
+
+                      return _buildConversationItem(
+                        context,
+                        conversation,
+                        hasUnread,
+                        isSelected,
+                        isWideScreen,
+                      );
+                    },
+                  ),
+      ),
+      floatingActionButton: messageProvider.conversations.isNotEmpty
+          ? FloatingActionButton(
+              onPressed: _createAndSelectConversation,
+              child: const Icon(Icons.add),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildEmptyConversationsState(BuildContext context, AppLocalizations l10n) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline,
+                size: 80,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              l10n.translate('no_conversations'),
+              style: AppTypography.titleLarge.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.translate('start_conversation'),
+              style: AppTypography.bodyLarge.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _createAndSelectConversation,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.translate('start_conversation')),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationItem(
+    BuildContext context,
+    Conversation conversation,
+    bool hasUnread,
+    bool isSelected,
+    bool isWideScreen,
+  ) {
+    return InkWell(
+      onTap: () {
+        if (isWideScreen) {
+          _selectConversation(conversation);
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(conversation: conversation),
+            ),
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          leading: Stack(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.support_agent,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 28,
+                ),
+              ),
+              if (hasUnread)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.error,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 2,
+                      ),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${conversation.unreadCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Support',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: hasUnread ? FontWeight.bold : FontWeight.w600,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              Text(
+                _formatDateTime(
+                  conversation.lastMessageAt ?? conversation.createdAt,
+                ),
+                style: AppTypography.labelSmall.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              conversation.lastMessage ?? 'No messages yet',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodyMedium.copyWith(
+                color: hasUnread
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatView(
+    BuildContext context,
+    AppLocalizations l10n,
+    MessageProvider messageProvider,
+    String currentUserId,
+    bool isWideScreen,
+    double screenHeight,
+  ) {
+    if (_selectedConversation == null) {
+      return _buildEmptyChatState(context, isWideScreen);
+    }
+
+    final messages = messageProvider.getMessagesForConversation(_selectedConversation!.id);
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: isWideScreen ? null : _buildChatAppBar(context, isWideScreen),
+      body: Column(
+        children: [
+          if (isWideScreen) _buildChatHeader(context),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.background,
+              ),
+              child: messageProvider.isLoading && messages.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : messages.isEmpty
+                      ? _buildEmptyMessagesState(context, l10n)
+                      : _buildMessagesList(context, messages, currentUserId, screenHeight),
+            ),
+          ),
+          _buildMessageInput(context, l10n),
+        ],
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildChatAppBar(BuildContext context, bool isWideScreen) {
+    return AppBar(
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () {
+          setState(() {
+            _selectedConversation = null;
+          });
+        },
+      ),
+      title: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.support_agent,
+              color: Theme.of(context).colorScheme.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Support',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Active',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.support_agent,
+              color: Theme.of(context).colorScheme.primary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Support',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Active',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyChatState(BuildContext context, bool isWideScreen) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: isWideScreen ? null : AppBar(
+        title: const Text('Support'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            setState(() {
+              _selectedConversation = null;
+            });
+          },
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Select a conversation',
+                style: AppTypography.titleLarge.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Choose a conversation from the list to start messaging',
+                style: AppTypography.bodyLarge.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyMessagesState(BuildContext context, AppLocalizations l10n) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              l10n.translate('no_messages'),
+              style: AppTypography.titleLarge.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.translate('start_chat'),
+              style: AppTypography.bodyLarge.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessagesList(
+    BuildContext context,
+    List<Message> messages,
+    String currentUserId,
+    double screenHeight,
+  ) {
+    return ListView.builder(
+      controller: _messagesScrollController,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final message = messages[index];
+        final isMe = message.senderId == currentUserId;
+        final showAvatar = index == 0 || 
+            (index > 0 && messages[index - 1].senderId != message.senderId);
+        
+        return _buildMessageBubble(
+          context,
+          message,
+          isMe,
+          showAvatar,
+        );
+      },
+    );
+  }
+
+  Widget _buildMessageBubble(
+    BuildContext context,
+    Message message,
+    bool isMe,
+    bool showAvatar,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe && showAvatar)
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.support_agent,
+                color: Theme.of(context).colorScheme.primary,
+                size: 18,
+              ),
+            )
+          else if (!isMe)
+            const SizedBox(width: 40),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: isMe
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isMe ? 20 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 20),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.content,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: isMe
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.onSurface,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatMessageTime(message.createdAt),
+                        style: AppTypography.labelSmall.copyWith(
+                          color: isMe
+                              ? Colors.white70
+                              : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.done_all,
+                          size: 14,
+                          color: Colors.white70,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isMe && showAvatar)
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(left: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.person,
+                color: Theme.of(context).colorScheme.secondary,
+                size: 18,
+              ),
+            )
+          else if (isMe)
+            const SizedBox(width: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageInput(BuildContext context, AppLocalizations l10n) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 8,
+        bottom: MediaQuery.of(context).padding.bottom + 8,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: TextField(
+                  controller: _messageController,
+                  focusNode: _messageFocusNode,
+                  decoration: InputDecoration(
+                    hintText: l10n.translate('type_message'),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    hintStyle: AppTypography.bodyMedium.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                    ),
+                  ),
+                  style: AppTypography.bodyMedium,
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isSending ? null : _sendMessage,
+                  borderRadius: BorderRadius.circular(28),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    padding: const EdgeInsets.all(16),
+                    child: _isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

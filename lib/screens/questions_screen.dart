@@ -3,37 +3,48 @@ import 'package:provider/provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/progress_provider.dart';
 import '../providers/auth_provider.dart';
-import '../models/question_model.dart';
+import '../models/api_models.dart' show Question;
 import '../l10n/app_localizations.dart';
 
 class QuestionsScreen extends StatefulWidget {
-  const QuestionsScreen({super.key});
+  final String? categoryId;
+  final String? categoryName;
+  
+  const QuestionsScreen({super.key, this.categoryId, this.categoryName});
 
   @override
   State<QuestionsScreen> createState() => _QuestionsScreenState();
 }
 
-class _QuestionsScreenState extends State<QuestionsScreen> {
+class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   int _currentQuestionIndex = 0;
   int? _selectedAnswerIndex;
   bool _showFeedback = false;
   bool _isCorrect = false;
   bool _isSubmitting = false;
 
+  Future<void> _loadProgress() async {
+    final progressProvider = Provider.of<ProgressProvider>(context, listen: false);
+    await progressProvider.getProgressStats();
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final questionProvider =
-          Provider.of<QuestionProvider>(context, listen: false);
-      if (questionProvider.questions.isEmpty) {
-        questionProvider.loadQuestions();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Load questions
+      final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
+      // Always reload questions if categoryId is provided or if questions are empty
+      if (widget.categoryId != null || questionProvider.questions.isEmpty) {
+        await questionProvider.loadQuestions(categoryId: widget.categoryId);
       }
     });
   }
 
   Future<void> _handleAnswerSelection(
-    QuestionModel question,
+    Question question,
     int selectedIndex,
   ) async {
     if (_showFeedback || _isSubmitting) return;
@@ -42,12 +53,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       _isSubmitting = true;
     });
 
-    final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
-    final questions = questionProvider.questions;
-
     setState(() {
       _selectedAnswerIndex = selectedIndex;
-      _isCorrect = selectedIndex == question.correctIndex;
+      final correctOptionIndex = question.options.indexWhere((opt) => opt.isCorrect);
+      _isCorrect = selectedIndex == correctOptionIndex;
       _showFeedback = true;
       _isSubmitting = false;
     });
@@ -56,19 +65,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         Provider.of<ProgressProvider>(context, listen: false);
     await progressProvider.submitAnswer(
       questionId: question.id,
-      selectedIndex: selectedIndex,
-      correctIndex: question.correctIndex,
-      totalQuestions: questions.length,
+      selectedOption: String.fromCharCode(65 + selectedIndex),
+      categoryId: question.categoryId,
     );
 
-    // Update user progress
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.user != null) {
-      await authProvider.loadUserData(authProvider.user!.uid);
-    }
+    // Reload progress
+    await _loadProgress();
   }
 
-  void _nextQuestion() {
+  Future<void> _nextQuestion() async {
     if (!_showFeedback) return; // Don't allow next if no answer selected
     
     final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
@@ -81,7 +86,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       });
     } else {
       // All questions completed
-        Navigator.of(context).pop();
+      await _loadProgress();
+      
+      // Navigate to home screen instead of just popping
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -90,7 +97,9 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               children: [
                 Icon(Icons.check_circle, color: Theme.of(context).colorScheme.onError),
                 const SizedBox(width: 12),
-                Text(l10n.translate('well_done')),
+                Expanded(
+                  child: Text(l10n.translate('well_done')),
+                ),
               ],
             ),
             backgroundColor: Colors.green,
@@ -98,14 +107,19 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
+            duration: const Duration(seconds: 3),
           ),
         );
+        
+        // Navigate to home screen
+        Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final l10n = AppLocalizations.of(context)!;
     final questionProvider = Provider.of<QuestionProvider>(context);
     final questions = questionProvider.questions;
@@ -114,16 +128,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.translate('questions'))),
         body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                Theme.of(context).colorScheme.surface,
-              ],
-            ),
-          ),
+          color: Theme.of(context).colorScheme.surface,
           child: const Center(
             child: CircularProgressIndicator(),
           ),
@@ -135,16 +140,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.translate('questions'))),
         body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                Theme.of(context).colorScheme.surface,
-              ],
-            ),
-          ),
+          color: Theme.of(context).colorScheme.surface,
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -152,14 +148,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 Icon(
                   Icons.quiz_outlined,
                   size: 80,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                 const SizedBox(height: 20),
                 Text(
                   l10n.translate('no_questions_available'),
                   style: TextStyle(
                     fontSize: 18,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -185,29 +181,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.translate('app_name')),
+            Text(widget.categoryName ?? l10n.translate('questions')),
             Text(
               '${l10n.translate('question')} ${_currentQuestionIndex + 1} ${l10n.translate('of')} ${questions.length}',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.normal,
-                color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.7),
+                color: Theme.of(context).colorScheme.onPrimary,
               ),
             ),
           ],
         ),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary.withOpacity(0.03),
-                Theme.of(context).colorScheme.surface.withOpacity(0.95),
-              ],
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: Column(
           children: [
             // Progress bar
@@ -217,7 +204,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
+                  color: Theme.of(context).colorScheme.shadow,
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -269,17 +256,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   Container(
                     padding: const EdgeInsets.all(24.0),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                          Theme.of(context).colorScheme.surface,
-                        ],
-                      ),
+                      color: const Color(0xFF1E3A8A).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                        color: const Color(0xFF1E3A8A).withOpacity(0.3),
                         width: 1,
                       ),
                     ),
@@ -289,7 +269,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
+                            color: const Color(0xFF1E3A8A).withOpacity(0.95),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -304,7 +284,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: Text(
-                            question.text,
+                            question.getQuestionText('en'),
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -318,11 +298,11 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                   ),
                   const SizedBox(height: 30),
                   // Answer choices
-                  ...question.choices.asMap().entries.map((entry) {
+                  ...question.options.asMap().entries.map((entry) {
                     final index = entry.key;
-                    final choice = entry.value;
+                    final option = entry.value;
                     final isSelected = _selectedAnswerIndex == index;
-                    final isCorrectAnswer = index == question.correctIndex;
+                    final isCorrectAnswer = option.isCorrect;
 
                     Color backgroundColor;
                     Color textColor;
@@ -341,18 +321,18 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                         borderColor = Colors.red;
                         icon = Icons.cancel;
                       } else {
-                        backgroundColor = Theme.of(context).colorScheme.surfaceContainerHighest;
-                        textColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
-                        borderColor = Theme.of(context).colorScheme.outline.withOpacity(0.5);
+                      backgroundColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+                      textColor = Theme.of(context).colorScheme.onSurface;
+                      borderColor = Theme.of(context).colorScheme.outline;
                       }
                     } else if (isSelected) {
-                      backgroundColor = Theme.of(context).colorScheme.primary.withOpacity(0.1);
+                      backgroundColor = Theme.of(context).colorScheme.primaryContainer;
                       textColor = Theme.of(context).colorScheme.primary;
                       borderColor = Theme.of(context).colorScheme.primary;
                     } else {
                       backgroundColor = Theme.of(context).colorScheme.surface;
                       textColor = Theme.of(context).colorScheme.onSurface;
-                      borderColor = Theme.of(context).colorScheme.outline.withOpacity(0.5);
+                      borderColor = Theme.of(context).colorScheme.outline;
                     }
 
                     return Padding(
@@ -374,7 +354,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                               boxShadow: isSelected || (isCorrectAnswer && _showFeedback)
                                   ? [
                                       BoxShadow(
-                                        color: borderColor.withOpacity(0.2),
+                                        color: borderColor,
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -420,7 +400,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Text(
-                                    choice,
+                                    option.getText('en'),
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: textColor,
@@ -504,10 +484,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             Container(
               padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 20.0),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withOpacity(0.95),
+                color: Theme.of(context).colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                    color: Theme.of(context).colorScheme.shadow,
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -536,10 +516,10 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                      foregroundColor: Colors.white,
                       elevation: 4,
-                      shadowColor: Theme.of(context).colorScheme.primary.withOpacity(0.4),
+                      shadowColor: const Color(0xFF1E3A8A).withOpacity(0.5),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),

@@ -15,6 +15,8 @@ class LanguageSelectionScreen extends StatelessWidget {
     final languages = [
       {'code': 'en', 'name': 'English', 'flag': '🇺🇸', 'native': 'English'},
       {'code': 'am', 'name': 'Amharic', 'flag': '🇪🇹', 'native': 'አማርኛ'},
+      {'code': 'om', 'name': 'Afan Oromo', 'flag': '🇪🇹', 'native': 'Afaan Oromoo'},
+      {'code': 'ti', 'name': 'Tigrinya', 'flag': '🇪🇷', 'native': 'ትግርኛ'},
       {'code': 'ar', 'name': 'Arabic', 'flag': '🇸🇦', 'native': 'العربية'},
     ];
 
@@ -52,10 +54,10 @@ class LanguageSelectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 15),
                 Text(
-                  'اختر اللغة | ቋንቋ ይምረጡ',
+                  'اختر اللغة | ቋንቋ ይምረጡ | Afaan Filadhu | ቋንቋ ምረጽ',
                   style: TextStyle(
-                    fontSize: 20,
-                    color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.9),
+                    fontSize: 18,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -112,7 +114,7 @@ class LanguageSelectionScreen extends StatelessWidget {
                                 lang['native']!,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                                  color: Theme.of(context).colorScheme.primary,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),

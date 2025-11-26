@@ -8,6 +8,8 @@ class UserModel {
   final ProgressModel progress;
   final bool certificateIssued;
   final bool isAdmin;
+  final bool examCompleted; // Track if user has completed the exam
+  final bool canRetakeExam; // Admin can set this to allow retake
 
   UserModel({
     required this.uid,
@@ -19,6 +21,8 @@ class UserModel {
     required this.progress,
     this.certificateIssued = false,
     this.isAdmin = false,
+    this.examCompleted = false,
+    this.canRetakeExam = false,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String uid) {
@@ -32,6 +36,8 @@ class UserModel {
       progress: ProgressModel.fromMap(map['progress'] ?? {}),
       certificateIssued: map['certificateIssued'] ?? false,
       isAdmin: map['isAdmin'] ?? false,
+      examCompleted: map['examCompleted'] ?? false,
+      canRetakeExam: map['canRetakeExam'] ?? false,
     );
   }
 
@@ -45,6 +51,8 @@ class UserModel {
       'progress': progress.toMap(),
       'certificateIssued': certificateIssued,
       'isAdmin': isAdmin,
+      'examCompleted': examCompleted,
+      'canRetakeExam': canRetakeExam,
     };
   }
 
@@ -57,6 +65,8 @@ class UserModel {
     ProgressModel? progress,
     bool? certificateIssued,
     bool? isAdmin,
+    bool? examCompleted,
+    bool? canRetakeExam,
   }) {
     return UserModel(
       uid: uid,
@@ -68,6 +78,8 @@ class UserModel {
       progress: progress ?? this.progress,
       certificateIssued: certificateIssued ?? this.certificateIssued,
       isAdmin: isAdmin ?? this.isAdmin,
+      examCompleted: examCompleted ?? this.examCompleted,
+      canRetakeExam: canRetakeExam ?? this.canRetakeExam,
     );
   }
 }

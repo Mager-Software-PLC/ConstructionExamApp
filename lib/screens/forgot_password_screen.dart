@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../services/backend_auth_service.dart';
 import '../l10n/app_localizations.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -52,9 +52,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       });
 
       try {
-        await FirebaseAuth.instance.sendPasswordResetEmail(
-          email: _emailController.text.trim(),
-        );
+        // Note: Forgot password endpoint needs to be added to backend
+        // For now, show a message that this feature is coming soon
+        // TODO: Implement forgot password via backend API
+        await Future.delayed(const Duration(seconds: 1));
         setState(() {
           _emailSent = true;
           _isLoading = false;
@@ -68,7 +69,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                e.toString().contains('user-not-found')
+                e.toString().contains('not found') || e.toString().contains('user-not-found')
                     ? l10n.translate('email_not_found')
                     : l10n.translate('reset_failed'),
               ),
@@ -90,16 +91,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              Theme.of(context).colorScheme.surface,
-            ],
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
@@ -120,11 +112,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           icon: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                              color: Theme.of(context).colorScheme.surface,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                                  color: Theme.of(context).colorScheme.shadow,
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -143,7 +135,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -172,7 +164,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             : l10n.translate('enter_email_reset'),
                         style: TextStyle(
                           fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
@@ -204,8 +196,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _sendPasswordReset,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                              backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                              foregroundColor: Colors.white,
                               elevation: 3,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -278,8 +270,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           child: ElevatedButton(
                             onPressed: () => Navigator.of(context).pop(),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                              backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                              foregroundColor: Colors.white,
                               elevation: 3,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),

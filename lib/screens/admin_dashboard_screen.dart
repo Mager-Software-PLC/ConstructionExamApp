@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/firestore_service.dart';
-import '../models/question_model.dart';
+import '../services/api_service.dart';
+import '../models/api_models.dart';
 import 'admin_question_edit_screen.dart';
 import 'admin_users_screen.dart';
+import 'admin_materials_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -15,7 +16,7 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  final FirestoreService _firestoreService = FirestoreService();
+  final ApiService _apiService = ApiService();
   int _selectedIndex = 0;
 
   @override
@@ -32,24 +33,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+        foregroundColor: Colors.white,
       ),
       drawer: _buildDrawer(),
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.03),
-              Theme.of(context).colorScheme.surface.withOpacity(0.95),
-            ],
-          ),
+          color: Theme.of(context).colorScheme.surface,
         ),
         child: _selectedIndex == 0
             ? _buildQuestionsView()
-            : const AdminUsersScreen(),
+            : _selectedIndex == 1
+                ? const AdminUsersScreen()
+                : const AdminMaterialsScreen(),
       ),
     );
   }
@@ -62,7 +58,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF1E3A8A).withOpacity(0.05),
+              Theme.of(context).colorScheme.surfaceContainerHighest,
               Colors.white,
             ],
           ),
@@ -77,7 +73,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   color: Theme.of(context).colorScheme.primary,
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+                      color: Theme.of(context).colorScheme.shadow,
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -108,7 +104,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               // Navigation Items
               _buildDrawerItem(Icons.quiz, 'Questions', 0),
               _buildDrawerItem(Icons.people, 'Users & Results', 1),
+              _buildDrawerItem(Icons.description, 'Materials', 2),
               const Spacer(),
+              const Divider(),
+              // Clear All Answers button
+              ListTile(
+                leading: const Icon(Icons.delete_sweep, color: Colors.red),
+                title: const Text(
+                  'Clear All Answers',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop(); // Close drawer first
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Clear All Answers'),
+                      content: const Text(
+                        'This will delete ALL answers and reset progress for ALL users. This action cannot be undone. Are you sure?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          child: const Text('Clear All'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true && mounted) {
+                    try {
+                      // Show loading
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+
+                      // TODO: Implement clear all answers via backend API
+                      // await _apiService.clearAllUsersAnswers();
+                      throw Exception('Clear all answers not yet implemented in backend API');
+
+                      if (mounted) {
+                        Navigator.of(context).pop(); // Close loading
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('All answers cleared successfully. All users can now start fresh.'),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        Navigator.of(context).pop(); // Close loading
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
               const Divider(),
               // Logout button
               ListTile(
@@ -146,7 +213,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return ListTile(
       leading: Icon(
         icon,
-        color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+        color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
       ),
       title: Text(
         title,
@@ -156,7 +223,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       ),
       selected: isSelected,
-      selectedTileColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+      selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
       onTap: () {
         setState(() {
           _selectedIndex = index;
@@ -206,8 +273,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         icon: const Icon(Icons.add),
                         label: const Text('Add Question'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                          backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         ),
                       ),
@@ -253,11 +320,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.quiz_outlined, size: 80, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
+                  Icon(Icons.quiz_outlined, size: 80, color: Theme.of(context).colorScheme.onSurface),
                   const SizedBox(height: 16),
                   Text(
                     'No questions found',
-                    style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                    style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurface),
                   ),
                 ],
               ),
@@ -280,14 +347,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ),
                             ),
                             title: Text(
-                              question.text,
+                              question.getQuestionText('en'),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             subtitle: Text(
-                              'Correct: ${String.fromCharCode(65 + question.correctIndex)}',
-                              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                              'Difficulty: ${question.difficulty}',
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -319,20 +386,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Correct Answer: ${String.fromCharCode(65 + question.correctIndex)} (Index: ${question.correctIndex})',
+                                      'Options:',
                                       style: const TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 8),
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
-                                      children: question.choices.asMap().entries.map((entry) {
+                                      children: question.options.asMap().entries.map((entry) {
                                         final idx = entry.key;
-                                        final choice = entry.value;
-                                        final isCorrect = idx == question.correctIndex;
+                                        final option = entry.value;
+                                        final isCorrect = option.isCorrect;
                                         return Chip(
                                           label: Text(
-                                            '${String.fromCharCode(65 + idx)}: $choice',
+                                            '${String.fromCharCode(65 + idx)}: ${option.getText('en')}',
                                             style: const TextStyle(fontSize: 12),
                                           ),
                                           backgroundColor: isCorrect ? Colors.green.shade50 : Colors.grey.shade100,
@@ -366,7 +433,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ),
                             ),
                             title: Text(
-                              question.text,
+                              question.getQuestionText('en'),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -375,19 +442,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Correct Answer: ${String.fromCharCode(65 + question.correctIndex)} (Index: ${question.correctIndex})',
+                                  'Difficulty: ${question.difficulty}',
                                   style: TextStyle(color: Colors.grey.shade600),
                                 ),
                                 const SizedBox(height: 4),
                                 Wrap(
                                   spacing: 8,
-                                  children: question.choices.asMap().entries.map((entry) {
+                                  children: question.options.asMap().entries.map((entry) {
                                     final idx = entry.key;
-                                    final choice = entry.value;
-                                    final isCorrect = idx == question.correctIndex;
+                                    final option = entry.value;
+                                    final isCorrect = option.isCorrect;
+                                    final optionText = option.getText('en');
                                     return Chip(
                                       label: Text(
-                                        '${String.fromCharCode(65 + idx)}: ${choice.length > 20 ? choice.substring(0, 20) + "..." : choice}',
+                                        '${String.fromCharCode(65 + idx)}: ${optionText.length > 20 ? optionText.substring(0, 20) + "..." : optionText}',
                                         style: const TextStyle(fontSize: 11),
                                       ),
                                       backgroundColor: isCorrect ? Colors.green.shade50 : Colors.grey.shade100,
@@ -433,12 +501,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Future<void> _deleteQuestion(QuestionModel question) async {
+  Future<void> _deleteQuestion(Question question) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Question?'),
-        content: Text('Are you sure you want to delete:\n\n"${question.text}"?'),
+        content: Text('Are you sure you want to delete:\n\n"${question.getQuestionText('en')}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -455,14 +523,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     if (confirmed == true) {
       try {
-        await _firestoreService.deleteQuestion(question.id);
+        // TODO: Implement delete question via backend API
+        // await _apiService.deleteQuestion(question.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Question deleted successfully'),
-              backgroundColor: Colors.green,
+              content: Text('Delete question not yet implemented in backend API'),
+              backgroundColor: Colors.orange,
             ),
           );
+          // For now, just reload questions
           final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
           questionProvider.loadQuestions();
         }

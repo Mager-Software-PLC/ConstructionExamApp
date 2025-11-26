@@ -1,248 +1,235 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart' show User;
-import '../services/auth_service.dart';
+import '../services/backend_auth_service.dart';
 import '../services/session_service.dart';
-import '../models/user_model.dart';
+import '../models/api_models.dart';
 
 class AuthProvider with ChangeNotifier {
-  final AuthService _authService = AuthService();
+  final BackendAuthService _authService = BackendAuthService();
   final SessionService _sessionService = SessionService();
-  UserModel? _user;
+  User? _user;
   bool _isLoading = false;
   String? _errorMessage;
   bool _isSessionValid = false;
+  bool _isInitialized = false;
+  final Completer<void> _initCompleter = Completer<void>();
 
-  UserModel? get user => _user;
+  User? get user => _user;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
   bool get isSessionValid => _isSessionValid;
-  User? get currentUser => _authService.currentUser;
+  bool get isInitialized => _isInitialized;
 
   AuthProvider() {
     _init();
   }
 
+  // Wait for initialization to complete
+  Future<void> waitForInitialization() async {
+    if (!_initCompleter.isCompleted) {
+      await _initCompleter.future;
+    }
+  }
+
   Future<void> _init() async {
-    // Listen to auth state changes FIRST (Firebase Auth persists automatically)
-    // This stream will emit the current user if Firebase Auth has restored the session
-    _authService.authStateChanges.listen((User? firebaseUser) async {
-      if (firebaseUser != null) {
-        await loadUserData(firebaseUser.uid);
-        // Save session with rememberMe = true for persistent auth
-        await _sessionService.saveSession(firebaseUser.uid, rememberMe: true);
+    try {
+      // Check if user is logged in
+      final isLoggedIn = await _authService.isLoggedIn();
+      
+      if (isLoggedIn) {
+        // Load user data from API
+        final result = await _authService.getCurrentUser();
+        if (result['success'] == true && result['user'] != null) {
+          _user = User.fromJson(result['user']);
+          await _sessionService.saveSession(
+            _user!.id,
+            rememberMe: true,
+            email: _user!.email,
+          );
+          await _sessionService.refreshSession();
+          _isSessionValid = true;
+        }
+      }
+      
+      _isInitialized = true;
+      if (!_initCompleter.isCompleted) {
+        _initCompleter.complete();
+      }
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isInitialized = true;
+      if (!_initCompleter.isCompleted) {
+        _initCompleter.complete();
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadUserFromSession(String sessionId) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final result = await _authService.getCurrentUser();
+      if (result['success'] == true && result['user'] != null) {
+        _user = User.fromJson(result['user']);
         _isSessionValid = true;
-        notifyListeners();
       } else {
         _user = null;
         _isSessionValid = false;
         await _sessionService.clearSession();
-        notifyListeners();
       }
-    });
-    
-    // Wait for Firebase Auth to restore session from local storage
-    await Future.delayed(const Duration(milliseconds: 1000));
-    
-    // Check for existing session after Firebase Auth has had time to restore
-    await _checkSession();
-  }
 
-  Future<void> _checkSession() async {
-    try {
-      // First check if Firebase Auth has restored the user (most reliable)
-      final user = _authService.currentUser;
-      if (user != null) {
-        await loadUserData(user.uid);
-        await _sessionService.saveSession(user.uid, rememberMe: true);
-        await _sessionService.refreshSession();
-        _isSessionValid = true;
-        notifyListeners();
-        return;
-      }
-      
-      // If Firebase Auth hasn't restored, check SharedPreferences
-      final hasSession = await _sessionService.hasValidSession();
-      if (hasSession) {
-        final savedUserId = await _sessionService.getSession();
-        if (savedUserId != null) {
-          // Wait a bit more for Firebase Auth to restore
-          await Future.delayed(const Duration(milliseconds: 500));
-          final userRetry = _authService.currentUser;
-          if (userRetry != null && userRetry.uid == savedUserId) {
-            await loadUserData(userRetry.uid);
-            await _sessionService.refreshSession();
-            _isSessionValid = true;
-            notifyListeners();
-          }
-        }
-      }
-    } catch (e) {
-      // Session check failed, user needs to login
-      _isSessionValid = false;
-    }
-  }
-
-  Future<void> loadUserData(String uid) async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-
-      _user = await _authService.getUserData(uid);
-      if (_user != null) {
-        // Ensure session is saved whenever we load user data
-        await _sessionService.saveSession(uid, rememberMe: true);
-      }
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
       _isLoading = false;
+      _user = null;
+      _isSessionValid = false;
+      await _sessionService.clearSession();
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadUserData(String userId) async {
+    // Load user data from API using current user endpoint
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final result = await _authService.getCurrentUser();
+      if (result['success'] == true && result['user'] != null) {
+        _user = User.fromJson(result['user']);
+        _isSessionValid = true;
+      } else {
+        _user = null;
+        _isSessionValid = false;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      _user = null;
+      _isSessionValid = false;
       notifyListeners();
     }
   }
 
   Future<bool> register({
-    required String fullName,
+    required String name,
     required String email,
-    required String phone,
     required String password,
-    bool rememberMe = true, // Default to true for persistent auth
+    required String phone,
   }) async {
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      _user = await _authService.register(
-        fullName: fullName,
+      final result = await _authService.register(
+        name: name,
         email: email,
-        phone: phone,
         password: password,
+        phone: phone,
       );
 
-      if (_user != null) {
-        // Save session after registration
-        await _sessionService.saveSession(_user!.uid, rememberMe: rememberMe);
+      if (result['success'] == true) {
+        _user = User.fromJson(result['user']);
+        await _sessionService.saveSession(
+          _user!.id,
+          rememberMe: true,
+          email: _user!.email,
+        );
         _isSessionValid = true;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['message'] ?? 'Registration failed';
+        _isLoading = false;
+        notifyListeners();
+        return false;
       }
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
     } catch (e) {
       _errorMessage = e.toString();
       _isLoading = false;
-      _isSessionValid = false;
       notifyListeners();
       return false;
     }
   }
 
   Future<bool> login({
-    required String email,
+    required String emailOrPhone,
     required String password,
-    bool rememberMe = true, // Default to true for persistent auth
   }) async {
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      _user = await _authService.login(
-        email: email,
+      final result = await _authService.login(
+        emailOrPhone: emailOrPhone,
         password: password,
       );
 
-      if (_user != null) {
-        // Save session
-        await _sessionService.saveSession(_user!.uid, rememberMe: rememberMe);
+      if (result['success'] == true) {
+        _user = User.fromJson(result['user']);
+        
+        // Small delay to ensure token is saved
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        // Verify token was saved (it should be saved in api_service.login)
+        final hasToken = await _authService.isLoggedIn();
+        if (!hasToken) {
+          print('[Auth] Error: Token not found after login. Token should have been saved in api_service.login');
+          _errorMessage = 'Failed to save authentication token. Please try logging in again.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+        
+        print('[Auth] Login successful, token verified. User ID: ${_user!.id}');
+        
+        await _sessionService.saveSession(
+          _user!.id,
+          rememberMe: true,
+          email: _user!.email,
+        );
+        await _sessionService.refreshSession();
         _isSessionValid = true;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['message'] ?? 'Login failed';
+        _isLoading = false;
+        notifyListeners();
+        return false;
       }
-
-      _isLoading = false;
-      notifyListeners();
-      return _user != null;
     } catch (e) {
       _errorMessage = e.toString();
       _isLoading = false;
-      _isSessionValid = false;
       notifyListeners();
       return false;
     }
   }
 
   Future<void> logout() async {
-    await _authService.logout();
-    await _sessionService.clearSession();
-    _user = null;
-    _isSessionValid = false;
-    notifyListeners();
-  }
-
-  // Refresh session (call periodically to keep session alive)
-  Future<void> refreshSession() async {
-    if (_user != null) {
-      await _sessionService.refreshSession();
-    }
-  }
-
-  // Check and restore session on app start
-  Future<bool> restoreSession() async {
-    try {
-      // First check if we have a saved session
-      final userId = await _sessionService.getSession();
-      if (userId == null) {
-        return false;
-      }
-
-      // Wait a bit for Firebase Auth to restore session
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // Check if Firebase Auth has restored the user
-      final user = _authService.currentUser;
-      if (user != null && user.uid == userId) {
-        // User is authenticated in Firebase - load their data
-        await loadUserData(user.uid);
-        await _sessionService.refreshSession();
-        _isSessionValid = true;
-        notifyListeners();
-        return true;
-      } else {
-        // Session exists but Firebase user is null - might need to wait more
-        // Try one more time after a longer delay
-        await Future.delayed(const Duration(milliseconds: 500));
-        final userRetry = _authService.currentUser;
-        if (userRetry != null && userRetry.uid == userId) {
-          await loadUserData(userRetry.uid);
-          await _sessionService.refreshSession();
-          _isSessionValid = true;
-          notifyListeners();
-          return true;
-        }
-        // Session exists but Firebase user is null - clear invalid session
-        await _sessionService.clearSession();
-        _isSessionValid = false;
-        return false;
-      }
-    } catch (e) {
-      // Error restoring session - clear it
-      await _sessionService.clearSession();
-      _isSessionValid = false;
-      return false;
-    }
-  }
-
-  Future<void> updateUser(UserModel updatedUser) async {
     try {
       _isLoading = true;
-      _errorMessage = null;
       notifyListeners();
 
-      await _authService.updateUserData(updatedUser);
-      _user = updatedUser;
-
+      await _authService.logout();
+      await _sessionService.clearSession();
+      
+      _user = null;
+      _isSessionValid = false;
+      _errorMessage = null;
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -251,5 +238,75 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
     }
   }
-}
 
+  Future<void> refreshSession() async {
+    try {
+      final isLoggedIn = await _authService.isLoggedIn();
+      if (isLoggedIn) {
+        final result = await _authService.getCurrentUser();
+        if (result['success'] == true && result['user'] != null) {
+          _user = User.fromJson(result['user']);
+          _isSessionValid = true;
+        } else {
+          _isSessionValid = false;
+        }
+      } else {
+        _isSessionValid = false;
+      }
+      notifyListeners();
+    } catch (e) {
+      _isSessionValid = false;
+      notifyListeners();
+    }
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  // Method to set user from token (for auto-login)
+  Future<void> loadUserFromToken() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // First verify token exists
+      final hasToken = await _authService.isLoggedIn();
+      if (!hasToken) {
+        print('[Auth] No token found for auto-login');
+        _user = null;
+        _isSessionValid = false;
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final result = await _authService.getCurrentUser();
+      if (result['success'] == true && result['user'] != null) {
+        _user = User.fromJson(result['user']);
+        await _sessionService.saveSession(
+          _user!.id,
+          rememberMe: true,
+          email: _user!.email,
+        );
+        _isSessionValid = true;
+        print('[Auth] Auto-login successful for user: ${_user!.id}');
+      } else {
+        print('[Auth] Auto-login failed: ${result['message']}');
+        _user = null;
+        _isSessionValid = false;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      print('[Auth] Auto-login error: $e');
+      _errorMessage = e.toString();
+      _isLoading = false;
+      _user = null;
+      _isSessionValid = false;
+      notifyListeners();
+    }
+  }
+}

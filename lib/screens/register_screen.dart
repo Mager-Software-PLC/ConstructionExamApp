@@ -34,7 +34,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.register(
-        fullName: _fullNameController.text.trim(),
+        name: _fullNameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         password: _passwordController.text,
@@ -63,16 +63,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         title: Text(l10n.translate('create_account')),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              Theme.of(context).colorScheme.surface,
-            ],
-          ),
-        ),
+        color: Theme.of(context).colorScheme.surface,
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -110,7 +101,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     l10n.translate('join_us_to_start'),
                     style: TextStyle(
                       fontSize: 15,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w500,
                     ),
                     textAlign: TextAlign.center,
@@ -234,8 +225,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: ElevatedButton(
                     onPressed: authProvider.isLoading ? null : _handleRegister,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
+                      foregroundColor: Colors.white,
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
