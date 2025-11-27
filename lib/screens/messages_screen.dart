@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/message_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/backend_auth_service.dart';
 import '../models/api_models.dart' hide Material;
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
@@ -31,11 +32,23 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Verify user is authenticated before loading conversations
+      if (!authProvider.isAuthenticated || authProvider.user == null) {
+        debugPrint('[MessagesScreen] User not authenticated, skipping conversation load');
+        return;
+      }
+      
       try {
+        debugPrint('[MessagesScreen] Loading conversations...');
+        // Initialize socket for real-time updates
+        await messageProvider.initializeSocket();
+        // Load conversations
         await messageProvider.loadConversations();
-        // Set up periodic refresh to check for new messages
-        _startMessagePolling();
+        debugPrint('[MessagesScreen] ✅ Conversations loaded: ${messageProvider.conversations.length}');
       } catch (e) {
+        debugPrint('[MessagesScreen] ❌ Error loading conversations: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -48,43 +61,12 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     });
   }
 
-  Timer? _pollingTimer;
-
-  void _startMessagePolling() {
-    // Poll for new messages every 10 seconds
-    _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      
-      final messageProvider = Provider.of<MessageProvider>(context, listen: false);
-      
-      // Reload conversations to get latest messages
-      messageProvider.loadConversations().then((_) {
-        // Check for new messages in current conversation
-        if (_selectedConversation != null) {
-          messageProvider.loadMessages(_selectedConversation!.id, refresh: false);
-        }
-      });
-    });
-  }
+  // Real-time updates are now handled by socket service - no polling needed
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
     _messageController.dispose();
     _conversationsScrollController.dispose();
-    _messagesScrollController.dispose();
-    _messageFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  void dispose() {
-    _conversationsScrollController.dispose();
-    _messageController.dispose();
     _messagesScrollController.dispose();
     _messageFocusNode.dispose();
     super.dispose();
@@ -128,8 +110,8 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
   }
 
   void _listenForNewMessages(String conversationId) {
-    // This will be called when new messages arrive
-    // The message provider will handle notifications and sounds
+    // Real-time messages are now handled automatically by socket service
+    // No manual listening needed - messages will appear via provider updates
   }
 
   Future<void> _createAndSelectConversation() async {
@@ -159,6 +141,21 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     }
 
     try {
+      // Verify token exists before creating conversation
+      final backendAuthService = BackendAuthService();
+      final hasToken = await backendAuthService.isLoggedIn();
+      if (!hasToken) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to start a conversation'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
       final conversation = await messageProvider.createConversation();
       
       if (mounted) {
@@ -393,7 +390,35 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
       body: RefreshIndicator(
         onRefresh: () => messageProvider.loadConversations(),
         child: messageProvider.isLoading && messageProvider.conversations.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Loading conversations...',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                    if (messageProvider.errorMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          messageProvider.errorMessage!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )
             : messageProvider.conversations.isEmpty
                 ? _buildEmptyConversationsState(context, l10n)
                 : ListView.builder(
@@ -514,19 +539,33 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
           ),
           leading: Stack(
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.support_agent,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 28,
-                ),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.support_agent,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
               if (hasUnread)
                 Positioned(
                   right: 0,
@@ -682,8 +721,8 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.6),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -691,7 +730,7 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
                     Text(
                       'Active',
                       style: AppTypography.labelSmall.copyWith(
-                        color: Colors.green,
+                        color: Colors.green.withOpacity(0.6),
                       ),
                     ),
                   ],
@@ -747,8 +786,8 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.6),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -756,7 +795,7 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
                     Text(
                       'Active',
                       style: AppTypography.bodySmall.copyWith(
-                        color: Colors.green,
+                        color: Colors.green.withOpacity(0.6),
                       ),
                     ),
                   ],
@@ -941,9 +980,12 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 4,
+                    color: isMe
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
+                        : Colors.black.withOpacity(0.08),
+                    blurRadius: isMe ? 8 : 4,
                     offset: const Offset(0, 2),
+                    spreadRadius: isMe ? 1 : 0,
                   ),
                 ],
               ),
@@ -1064,13 +1106,21 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
             const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                    spreadRadius: 1,
                   ),
                 ],
               ),

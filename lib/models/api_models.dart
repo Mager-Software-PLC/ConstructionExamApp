@@ -124,6 +124,7 @@ class Question {
   final int points;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final Map<String, dynamic>? translation; // Current translation from backend
 
   Question({
     required this.id,
@@ -135,54 +136,191 @@ class Question {
     this.points = 10,
     this.createdAt,
     this.updatedAt,
+    this.translation,
   });
 
   factory Question.fromJson(Map<String, dynamic> json) {
+    // Backend returns questions with translations array structure
+    // Handle both old format (question map) and new format (translations array)
+    
+    String categoryId = '';
+    if (json['category'] != null) {
+      if (json['category'] is String) {
+        categoryId = json['category'];
+      } else if (json['category'] is Map) {
+        categoryId = json['category']['_id'] ?? json['category']['id'] ?? '';
+      }
+    }
+    categoryId = categoryId.isEmpty ? (json['categoryId'] ?? '') : categoryId;
+    
+    // Handle translations array from backend
+    Map<String, String> questionMap = {};
+    List<QuestionOption> optionsList = [];
+    Map<String, String>? explanationMap;
+    Map<String, dynamic>? currentTranslation;
+    
+    if (json['translations'] != null && json['translations'] is List) {
+      // Backend format: translations array
+      final translations = json['translations'] as List<dynamic>;
+      
+      // Build question map from translations
+      for (var trans in translations) {
+        if (trans is Map<String, dynamic>) {
+          final lang = trans['language'] ?? 'en';
+          questionMap[lang] = trans['questionText'] ?? '';
+          if (trans['explanation'] != null) {
+            explanationMap ??= {};
+            explanationMap[lang] = trans['explanation'];
+          }
+        }
+      }
+      
+      // Get options from first translation (or from translation field if provided)
+      if (json['translation'] != null && json['translation'] is Map) {
+        currentTranslation = Map<String, dynamic>.from(json['translation']);
+        final transOptions = currentTranslation['options'] as List<dynamic>?;
+        if (transOptions != null) {
+          optionsList = transOptions
+              .map((opt) => QuestionOption.fromJson(opt))
+              .toList();
+        }
+      } else if (translations.isNotEmpty) {
+        // Use first translation's options
+        final firstTrans = translations[0] as Map<String, dynamic>;
+        final transOptions = firstTrans['options'] as List<dynamic>?;
+        if (transOptions != null) {
+          optionsList = transOptions
+              .map((opt) => QuestionOption.fromJson(opt))
+              .toList();
+        }
+      }
+    } else {
+      // Old format: direct question map and options
+      questionMap = Map<String, String>.from(json['question'] ?? {});
+      optionsList = (json['options'] as List<dynamic>?)
+          ?.map((opt) => QuestionOption.fromJson(opt))
+          .toList() ?? [];
+      explanationMap = json['explanation'] != null
+          ? Map<String, String>.from(json['explanation'])
+          : null;
+    }
+    
+    // If still no options, try to get from root level
+    if (optionsList.isEmpty && json['options'] != null) {
+      optionsList = (json['options'] as List<dynamic>?)
+          ?.map((opt) => QuestionOption.fromJson(opt))
+          .toList() ?? [];
+    }
+    
+    // If still no question text, try to get from root
+    if (questionMap.isEmpty && json['questionText'] != null) {
+      questionMap['en'] = json['questionText'];
+    }
+
     return Question(
       id: json['_id'] ?? json['id'] ?? '',
-      categoryId: json['categoryId'] ?? '',
-      question: Map<String, String>.from(json['question'] ?? {}),
-      options: (json['options'] as List<dynamic>?)
-          ?.map((opt) => QuestionOption.fromJson(opt))
-          .toList() ?? [],
-      explanation: json['explanation'] != null
-          ? Map<String, String>.from(json['explanation'])
-          : null,
+      categoryId: categoryId,
+      question: questionMap,
+      options: optionsList,
+      explanation: explanationMap,
       difficulty: json['difficulty'] ?? 'medium',
       points: json['points'] ?? 10,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
-      updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
+      createdAt: json['createdAt'] != null 
+          ? (json['createdAt'] is String 
+              ? DateTime.parse(json['createdAt']) 
+              : DateTime.fromMillisecondsSinceEpoch(json['createdAt']))
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? (json['updatedAt'] is String 
+              ? DateTime.parse(json['updatedAt']) 
+              : DateTime.fromMillisecondsSinceEpoch(json['updatedAt']))
+          : null,
+      translation: currentTranslation,
     );
   }
 
   String getQuestionText(String language) {
-    return question[language] ?? question['en'] ?? question.values.first;
+    // First try current translation if available
+    if (translation != null && translation!['questionText'] != null) {
+      return translation!['questionText'].toString();
+    }
+    // Then try question map
+    if (question.containsKey(language)) {
+      return question[language]!;
+    }
+    if (question.containsKey('en')) {
+      return question['en']!;
+    }
+    if (question.isNotEmpty) {
+      return question.values.first;
+    }
+    return '';
   }
 
   String? getExplanationText(String language) {
+    // First try current translation if available
+    if (translation != null && translation!['explanation'] != null) {
+      return translation!['explanation'].toString();
+    }
+    // Then try explanation map
     if (explanation == null) return null;
-    return explanation![language] ?? explanation!['en'] ?? explanation!.values.first;
+    if (explanation!.containsKey(language)) {
+      return explanation![language];
+    }
+    if (explanation!.containsKey('en')) {
+      return explanation!['en'];
+    }
+    if (explanation!.isNotEmpty) {
+      return explanation!.values.first;
+    }
+    return null;
   }
 }
 
 class QuestionOption {
   final Map<String, String> text; // Multilingual
   final bool isCorrect;
+  final int? order;
 
   QuestionOption({
     required this.text,
     required this.isCorrect,
+    this.order,
   });
 
   factory QuestionOption.fromJson(Map<String, dynamic> json) {
+    // Backend format: options have 'text' as string (not map)
+    // Old format: options have 'text' as map
+    Map<String, String> textMap = {};
+    
+    if (json['text'] is String) {
+      // Backend format: single string text
+      textMap['en'] = json['text'];
+    } else if (json['text'] is Map) {
+      // Old format: multilingual map
+      textMap = Map<String, String>.from(json['text']);
+    } else {
+      textMap['en'] = '';
+    }
+
     return QuestionOption(
-      text: Map<String, String>.from(json['text'] ?? {}),
+      text: textMap,
       isCorrect: json['isCorrect'] ?? false,
+      order: json['order'],
     );
   }
 
   String getText(String language) {
-    return text[language] ?? text['en'] ?? text.values.first;
+    if (text.containsKey(language)) {
+      return text[language]!;
+    }
+    if (text.containsKey('en')) {
+      return text['en']!;
+    }
+    if (text.isNotEmpty) {
+      return text.values.first;
+    }
+    return '';
   }
 }
 

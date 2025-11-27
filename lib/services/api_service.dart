@@ -1,31 +1,117 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../config/app_config.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://10.145.60.161:5000/api';
+  static const String baseUrl = AppConfig.apiBaseUrl;
   
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   
-  // Get stored token
+  // Get stored token with retry logic
   Future<String?> _getToken() async {
-    return await _storage.read(key: 'userToken');
+    try {
+      String? token = await _storage.read(key: 'userToken');
+      
+      // If token is null, try again with a small delay (handles race conditions)
+      if (token == null || token.isEmpty) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        token = await _storage.read(key: 'userToken');
+      }
+      
+      if (token != null && token.isNotEmpty) {
+        debugPrint('[API] _getToken: Token retrieved successfully, length: ${token.length}');
+      } else {
+        debugPrint('[API] _getToken: ⚠️ No token found in storage');
+      }
+      
+      return token;
+    } catch (e) {
+      debugPrint('[API] _getToken: ❌ Error reading token: $e');
+      return null;
+    }
+  }
+  
+  // Get stored refresh token
+  Future<String?> _getRefreshToken() async {
+    return await _storage.read(key: 'refreshToken');
   }
   
   // Set token
   Future<void> _setToken(String token) async {
-    await _storage.write(key: 'userToken', value: token);
+    try {
+      // Clean token before saving
+      final cleanToken = token.trim();
+      if (cleanToken.isEmpty) {
+        throw Exception('Cannot save empty token');
+      }
+      
+      debugPrint('[API] Saving token to Flutter Secure Storage, length: ${cleanToken.length}');
+      await _storage.write(key: 'userToken', value: cleanToken);
+      
+      // Verify it was saved immediately
+      final saved = await _storage.read(key: 'userToken');
+      if (saved == null || saved.isEmpty) {
+        debugPrint('[API] ❌ Token save verification failed - token is null or empty after save!');
+        throw Exception('Token was not saved to secure storage');
+      }
+      
+      if (saved != cleanToken) {
+        debugPrint('[API] ⚠️ Token save verification failed - token mismatch!');
+        debugPrint('[API] Expected: ${cleanToken.substring(0, 20)}..., Got: ${saved.substring(0, 20)}...');
+        throw Exception('Token verification failed - saved token does not match');
+      }
+      
+      debugPrint('[API] ✅ Token saved and verified successfully in Flutter Secure Storage');
+    } catch (e) {
+      debugPrint('[API] ❌ Error saving token to Flutter Secure Storage: $e');
+      rethrow;
+    }
+  }
+  
+  // Set refresh token
+  Future<void> _setRefreshToken(String refreshToken) async {
+    try {
+      final cleanToken = refreshToken.trim();
+      await _storage.write(key: 'refreshToken', value: cleanToken);
+      debugPrint('[API] Refresh token saved to secure storage, length: ${cleanToken.length}');
+    } catch (e) {
+      debugPrint('[API] ❌ Error saving refresh token: $e');
+      rethrow;
+    }
   }
   
   // Clear token
   Future<void> clearToken() async {
     await _storage.delete(key: 'userToken');
+    await _storage.delete(key: 'refreshToken');
   }
   
   // Verify token exists (for debugging)
   Future<bool> hasToken() async {
-    final token = await _getToken();
-    return token != null && token.isNotEmpty;
+    try {
+      final token = await _getToken();
+      final hasToken = token != null && token.isNotEmpty;
+      debugPrint('[API] hasToken check: $hasToken, token length: ${token?.length ?? 0}');
+      return hasToken;
+    } catch (e) {
+      debugPrint('[API] Error checking token: $e');
+      return false;
+    }
+  }
+  
+  // Get token (public method for providers)
+  Future<String?> getToken() async {
+    try {
+      final token = await _getToken();
+      debugPrint('[API] getToken called, token length: ${token?.length ?? 0}');
+      return token;
+    } catch (e) {
+      debugPrint('[API] Error getting token: $e');
+      return null;
+    }
   }
   
   // Make authenticated request
@@ -46,12 +132,21 @@ class ApiService {
       final token = await _getToken();
       if (token != null && token.isNotEmpty) {
         requestHeaders['Authorization'] = 'Bearer $token';
+        debugPrint('[API] ✅ Token found for endpoint: $endpoint (length: ${token.length})');
       } else {
-        print('[API] Error: Token is null or empty for endpoint: $endpoint');
-        throw ApiException(
-          message: 'Authentication token not provided. Please login again.',
-          statusCode: 401,
-        );
+        debugPrint('[API] ❌ Error: Token is null or empty for endpoint: $endpoint');
+        // Try to get token one more time with a small delay (in case of race condition)
+        await Future.delayed(const Duration(milliseconds: 100));
+        final retryToken = await _getToken();
+        if (retryToken != null && retryToken.isNotEmpty) {
+          requestHeaders['Authorization'] = 'Bearer $retryToken';
+          debugPrint('[API] ✅ Token found on retry for endpoint: $endpoint');
+        } else {
+          throw ApiException(
+            message: 'Authentication token not provided. Please login again.',
+            statusCode: 401,
+          );
+        }
       }
     }
     
@@ -144,9 +239,18 @@ class ApiService {
     );
     
     if (response['success'] == true && response['data'] != null) {
+      // Registration might return token or just user data (if email verification required)
       final token = response['data']['token'] as String?;
-      if (token != null) {
+      if (token != null && token.isNotEmpty) {
         await _setToken(token);
+      }
+      // Return user data in the expected format
+      if (response['data']['user'] != null) {
+        return {
+          ...response,
+          'user': response['data']['user'],
+          'token': token,
+        };
       }
     }
     
@@ -168,21 +272,68 @@ class ApiService {
     );
     
     if (response['success'] == true && response['data'] != null) {
-      final token = response['data']['token'] as String?;
+      final data = response['data'] as Map<String, dynamic>;
+      final token = data['token'] as String?;
+      final refreshToken = data['refreshToken'] as String?;
+      
+      debugPrint('[API] Login response received. Token present: ${token != null}, RefreshToken present: ${refreshToken != null}');
+      
+      // Store access token
       if (token != null && token.isNotEmpty) {
-        await _setToken(token);
-        // Verify token was saved
-        final savedToken = await _getToken();
-        if (savedToken != token) {
-          print('[API] Warning: Token save verification failed');
-        } else {
-          print('[API] Token saved successfully, length: ${token.length}');
+        try {
+          await _setToken(token);
+          // Verify token was saved
+          final savedToken = await _getToken();
+          if (savedToken != token.trim()) {
+            debugPrint('[API] ⚠️ Warning: Token save verification failed');
+            debugPrint('[API] Expected length: ${token.trim().length}, Saved length: ${savedToken?.length ?? 0}');
+          } else {
+            debugPrint('[API] ✅ Token saved successfully to Flutter Secure Storage, length: ${token.trim().length}');
+          }
+        } catch (e) {
+          debugPrint('[API] ❌ Error saving token: $e');
+          throw Exception('Failed to save authentication token: $e');
         }
       } else {
-        print('[API] Error: No token in login response');
+        debugPrint('[API] ❌ Error: No token in login response data');
+        throw Exception('No token received in login response');
       }
+      
+      // Store refresh token if provided
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        try {
+          await _setRefreshToken(refreshToken);
+          debugPrint('[API] ✅ Refresh token saved successfully to Flutter Secure Storage, length: ${refreshToken.trim().length}');
+        } catch (e) {
+          debugPrint('[API] ⚠️ Error saving refresh token: $e');
+          // Don't throw - refresh token is optional
+        }
+      } else {
+        debugPrint('[API] ⚠️ No refresh token in login response');
+      }
+      
+      // Final verification - ensure token is accessible
+      // Add delay and retry to ensure storage write is complete
+      bool tokenVerified = false;
+      for (int i = 0; i < 5; i++) {
+        await Future.delayed(const Duration(milliseconds: 200));
+        final verifyToken = await _getToken();
+        if (verifyToken != null && verifyToken.isNotEmpty && verifyToken == token.trim()) {
+          debugPrint('[API] ✅ Final token verification passed on attempt ${i + 1}, token length: ${verifyToken.length}');
+          tokenVerified = true;
+          break;
+        }
+        debugPrint('[API] ⚠️ Token verification attempt ${i + 1} failed, retrying...');
+      }
+      
+      if (!tokenVerified) {
+        debugPrint('[API] ❌ Critical: Token not accessible after save!');
+        throw Exception('Token was not properly saved to secure storage');
+      }
+      // Token verification completed in loop above
     } else {
-      print('[API] Error: Login response missing data or failed');
+      debugPrint('[API] ❌ Error: Login response missing data or failed');
+      debugPrint('[API] Response: $response');
     }
     
     return response;
@@ -213,7 +364,24 @@ class ApiService {
   }
   
   Future<Map<String, dynamic>> getCurrentUser() async {
-    return await _request('GET', '/auth/me');
+    try {
+      return await _request('GET', '/auth/me');
+    } catch (e) {
+      // If token is invalid, try to refresh it
+      final storedRefreshToken = await _getRefreshToken();
+      if (storedRefreshToken != null && storedRefreshToken.isNotEmpty) {
+        try {
+          final refreshResponse = await refreshToken(storedRefreshToken);
+          if (refreshResponse['success'] == true) {
+            // Retry the request with new token
+            return await _request('GET', '/auth/me');
+          }
+        } catch (refreshError) {
+          debugPrint('[API] Token refresh failed: $refreshError');
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
@@ -226,8 +394,17 @@ class ApiService {
     
     if (response['success'] == true && response['data'] != null) {
       final token = response['data']['token'] as String?;
-      if (token != null) {
+      final newRefreshToken = response['data']['refreshToken'] as String?;
+      
+      if (token != null && token.isNotEmpty) {
         await _setToken(token);
+        debugPrint('[API] Token refreshed successfully');
+      }
+      
+      // Update refresh token if provided
+      if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+        await _setRefreshToken(newRefreshToken);
+        debugPrint('[API] Refresh token updated');
       }
     }
     
@@ -273,8 +450,9 @@ class ApiService {
   Future<Map<String, dynamic>> getQuestions({
     String? categoryId,
     int page = 1,
-    int limit = 10,
+    int limit = 50,
     String? difficulty,
+    String? language,
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
@@ -286,6 +464,9 @@ class ApiService {
     }
     if (difficulty != null) {
       queryParams['difficulty'] = difficulty;
+    }
+    if (language != null) {
+      queryParams['language'] = language;
     }
     
     final queryString = queryParams.entries
@@ -301,11 +482,25 @@ class ApiService {
   
   Future<Map<String, dynamic>> getQuestionsByCategory(String categoryId, {
     int page = 1,
-    int limit = 10,
+    int limit = 50,
+    String? language,
   }) async {
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+    
+    if (language != null) {
+      queryParams['language'] = language;
+    }
+    
+    final queryString = queryParams.entries
+        .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+    
     return await _request(
       'GET',
-      '/questions/category/$categoryId?page=$page&limit=$limit',
+      '/questions/category/$categoryId?$queryString',
       requiresAuth: false,
     );
   }
@@ -401,6 +596,40 @@ class ApiService {
     );
   }
 
+  // Upload profile image
+  Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
+    try {
+      final url = Uri.parse('$baseUrl/users/profile/upload-image');
+      final token = await _getToken();
+      
+      if (token == null || token.isEmpty) {
+        throw Exception('Authentication token not found');
+      }
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorData = json.decode(response.body) as Map<String, dynamic>;
+        throw Exception(errorData['message'] ?? 'Failed to upload profile image');
+      }
+    } catch (e) {
+      debugPrint('[API] Error uploading profile image: $e');
+      rethrow;
+    }
+  }
+
+  // Update user profile
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    return await _request('PUT', '/users/profile', body: data);
+  }
+
   // Certificate endpoints
   Future<Map<String, dynamic>> getMyCertificate() async {
     return await _request('GET', '/certificates/my-certificate');
@@ -433,7 +662,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getAllMaterials() async {
-    return await _request('GET', '/materials/admin/all');
+    return await _request('GET', '/materials/admin/all', requiresAuth: true);
   }
 
   Future<Map<String, dynamic>> createMaterial({

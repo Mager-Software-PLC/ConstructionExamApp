@@ -6,13 +6,17 @@ class StorageService {
   final ImagePicker _picker = ImagePicker();
   final ApiService _apiService = ApiService();
 
-  // Note: Profile picture upload should be handled via backend API
-  // This is a placeholder - implement when backend supports file uploads
+  // Upload profile picture via backend API
   Future<String> uploadProfilePicture(String userId, File imageFile) async {
     try {
-      // TODO: Implement file upload via backend API
-      // For now, return a placeholder
-      throw Exception('Profile picture upload not yet implemented. Use backend API endpoint when available.');
+      final response = await _apiService.uploadProfileImage(imageFile);
+      
+      if (response['success'] == true && response['data'] != null) {
+        final avatarUrl = response['data']['avatar'] as String;
+        return avatarUrl;
+      } else {
+        throw Exception(response['message'] ?? 'Failed to upload profile picture');
+      }
     } catch (e) {
       throw Exception('Failed to upload profile picture: $e');
     }

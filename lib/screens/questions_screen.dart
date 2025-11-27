@@ -5,6 +5,7 @@ import '../providers/progress_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/api_models.dart' show Question;
 import '../l10n/app_localizations.dart';
+import '../services/screenshot_protection_service.dart';
 
 class QuestionsScreen extends StatefulWidget {
   final String? categoryId;
@@ -33,14 +34,27 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
   @override
   void initState() {
     super.initState();
+    // Enable screenshot protection for exam/questions screen
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      ScreenshotProtectionService().enableProtection();
+      
       // Load questions
       final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
       // Always reload questions if categoryId is provided or if questions are empty
       if (widget.categoryId != null || questionProvider.questions.isEmpty) {
-        await questionProvider.loadQuestions(categoryId: widget.categoryId);
+        await questionProvider.loadQuestions(
+          categoryId: widget.categoryId,
+          context: context,
+        );
       }
     });
+  }
+
+  @override
+  void dispose() {
+    // Disable screenshot protection when leaving questions screen
+    ScreenshotProtectionService().disableProtection();
+    super.dispose();
   }
 
   Future<void> _handleAnswerSelection(
@@ -161,7 +175,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   onPressed: () {
-                    questionProvider.loadQuestions();
+                    questionProvider.loadQuestions(context: context);
                   },
                   icon: const Icon(Icons.refresh),
                   label: Text(l10n.translate('load_questions')),

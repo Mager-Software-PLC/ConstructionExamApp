@@ -53,6 +53,9 @@ dependencies:
   # File Picker
   file_picker: ^8.1.4
   
+  # URL Launcher
+  url_launcher: ^6.3.1
+  
   # Charts
   fl_chart: ^0.69.0
   
@@ -68,6 +71,11 @@ dependencies:
   
   # HTTP Client
   http: ^1.2.2
+  
+  # Socket.IO Client
+  socket_io_client: ^2.0.3+1
+  
+  # Screenshot Protection - Using native platform channels
 
 dev_dependencies:
   flutter_test:

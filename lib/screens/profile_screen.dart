@@ -7,6 +7,7 @@ import '../providers/language_provider.dart';
 import '../providers/progress_provider.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
+import '../services/screenshot_protection_service.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'certificate_screen.dart';
@@ -33,6 +34,10 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
   @override
   void initState() {
     super.initState();
+    // Enable screenshot protection for profile screen (contains personal info)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenshotProtectionService().enableProtection();
+    });
     _loadUserData();
   }
 
@@ -47,6 +52,8 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
 
   @override
   void dispose() {
+    // Disable screenshot protection when leaving profile screen
+    ScreenshotProtectionService().disableProtection();
     _fullNameController.dispose();
     _phoneController.dispose();
     super.dispose();
@@ -79,23 +86,40 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
       final user = authProvider.user;
       if (user == null) return;
 
-      String? profilePictureUrl = user.avatar;
+      final apiService = ApiService();
+      
+      // Upload profile image first if selected
       if (_selectedImage != null) {
         try {
-          profilePictureUrl = await _storageService.uploadProfilePicture(user.id, _selectedImage!);
+          debugPrint('[Profile] Uploading profile image...');
+          final uploadResult = await apiService.uploadProfileImage(_selectedImage!);
+          if (uploadResult['success'] == true) {
+            debugPrint('[Profile] ✅ Profile image uploaded successfully');
+          } else {
+            throw Exception(uploadResult['message'] ?? 'Failed to upload profile image');
+          }
         } catch (e) {
-          // Image upload not yet implemented
+          debugPrint('[Profile] ❌ Error uploading profile image: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error uploading image: $e'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          // Continue with profile update even if image upload fails
         }
       }
 
-      final apiService = ApiService();
-      final result = await apiService.updateUser(user.id, {
+      // Update profile information
+      final result = await apiService.updateProfile({
         'name': _fullNameController.text.trim(),
         'phone': _phoneController.text.trim(),
-        if (profilePictureUrl != null) 'avatar': profilePictureUrl,
       });
 
       if (result['success'] == true && result['data'] != null) {
+        // Refresh user data to get updated avatar
         await authProvider.refreshSession();
         setState(() {
           _isEditing = false;
@@ -115,6 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
         throw Exception(result['message'] ?? 'Failed to update profile');
       }
     } catch (e) {
+      debugPrint('[Profile] ❌ Error updating profile: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -247,7 +272,23 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
                 child: _selectedImage != null
                     ? Image.file(_selectedImage!, fit: BoxFit.cover)
                     : (user.avatar != null && user.avatar!.isNotEmpty
-                        ? Image.network(user.avatar!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildDefaultAvatar(context))
+                        ? Image.network(
+                            user.avatar!.startsWith('http') 
+                                ? user.avatar! 
+                                : '${ApiService.baseUrl}${user.avatar!}',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _buildDefaultAvatar(context),
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              );
+                            },
+                          )
                         : _buildDefaultAvatar(context)),
               ),
             ),
@@ -399,7 +440,7 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(
-                color: canViewCertificate ? Colors.green.withOpacity(0.3) : Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                color: canViewCertificate ? Colors.green.withOpacity(0.15) : Theme.of(context).colorScheme.outline.withOpacity(0.1),
                 width: canViewCertificate ? 2 : 1,
               ),
             ),
@@ -425,13 +466,13 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: canViewCertificate 
-                              ? Colors.green.withOpacity(0.1)
+                              ? Colors.green.withOpacity(0.05)
                               : Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
                           Icons.verified,
-                          color: canViewCertificate ? Colors.green : Theme.of(context).colorScheme.primary,
+                          color: canViewCertificate ? Colors.green.withOpacity(0.7) : Theme.of(context).colorScheme.primary,
                           size: 32,
                         ),
                       ),
@@ -446,7 +487,7 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
                                   : l10n.translate('view_certificate'),
                               style: AppTypography.titleMedium.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: canViewCertificate ? Colors.green : Theme.of(context).colorScheme.primary,
+                                color: canViewCertificate ? Colors.green.withOpacity(0.7) : Theme.of(context).colorScheme.primary,
                               ),
                             ),
                             const SizedBox(height: 4),

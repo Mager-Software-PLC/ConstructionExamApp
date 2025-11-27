@@ -32,7 +32,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> with AutomaticKeepA
   Color _getDifficultyColor(String difficulty) {
     switch (difficulty.toLowerCase()) {
       case 'easy':
-        return Colors.green;
+        return Colors.green.withOpacity(0.7);
       case 'medium':
         return Colors.orange;
       case 'hard':
@@ -100,7 +100,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> with AutomaticKeepA
     );
 
     try {
-      await questionProvider.loadQuestions(categoryId: category.id);
+      await questionProvider.loadQuestions(
+        categoryId: category.id,
+        context: context,
+      );
 
       if (mounted) {
         Navigator.of(context).pop();

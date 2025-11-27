@@ -52,14 +52,36 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       });
 
       try {
-        // Note: Forgot password endpoint needs to be added to backend
-        // For now, show a message that this feature is coming soon
-        // TODO: Implement forgot password via backend API
-        await Future.delayed(const Duration(seconds: 1));
-        setState(() {
-          _emailSent = true;
-          _isLoading = false;
-        });
+        final authService = BackendAuthService();
+        final email = _emailController.text.trim();
+        
+        final result = await authService.sendOTP(email);
+        
+        if (result['success'] == true) {
+          setState(() {
+            _emailSent = true;
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _isLoading = false;
+          });
+          if (mounted) {
+            final l10n = AppLocalizations.of(context)!;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  result['message'] ?? l10n.translate('reset_failed'),
+                ),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+          }
+        }
       } catch (e) {
         setState(() {
           _isLoading = false;

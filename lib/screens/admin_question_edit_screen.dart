@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/screenshot_protection_service.dart';
 import '../models/api_models.dart';
 
 class AdminQuestionEditScreen extends StatefulWidget {
@@ -35,6 +36,11 @@ class _AdminQuestionEditScreenState extends State<AdminQuestionEditScreen> {
   @override
   void initState() {
     super.initState();
+    // Enable screenshot protection for admin question edit screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenshotProtectionService().enableProtection();
+    });
+    
     if (widget.question != null) {
       _textController.text = widget.question!.getQuestionText('en');
       final correctIndex = widget.question!.options.indexWhere((opt) => opt.isCorrect);

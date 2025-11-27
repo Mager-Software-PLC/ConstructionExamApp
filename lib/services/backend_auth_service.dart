@@ -1,14 +1,33 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'api_service.dart' show ApiService, ApiException;
 
 class BackendAuthService {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   
-  // Check if user is logged in
+  // Check if user is logged in with retry logic
   Future<bool> isLoggedIn() async {
-    final token = await _storage.read(key: 'userToken');
-    return token != null && token.isNotEmpty;
+    try {
+      // Try multiple times to handle potential race conditions
+      for (int i = 0; i < 3; i++) {
+        final token = await _storage.read(key: 'userToken');
+        if (token != null && token.isNotEmpty) {
+          debugPrint('[BackendAuth] ✅ isLoggedIn: Token found, length: ${token.length}');
+          return true;
+        }
+        
+        if (i < 2) {
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+      }
+      
+      debugPrint('[BackendAuth] ❌ isLoggedIn: No token found after retries');
+      return false;
+    } catch (e) {
+      debugPrint('[BackendAuth] ❌ Error checking token: $e');
+      return false;
+    }
   }
   
   // Register new user
@@ -27,10 +46,11 @@ class BackendAuthService {
       );
       
       if (response['success'] == true) {
+        // Registration might not include token if email verification is required
         return {
           'success': true,
-          'user': response['data']['user'],
-          'token': response['data']['token'],
+          'user': response['user'] ?? response['data']?['user'],
+          'token': response['token'] ?? response['data']?['token'],
         };
       } else {
         return {
@@ -62,6 +82,7 @@ class BackendAuthService {
           'success': true,
           'user': response['data']['user'],
           'token': response['data']['token'],
+          'refreshToken': response['data']['refreshToken'],
         };
       } else {
         return {
@@ -151,9 +172,28 @@ class BackendAuthService {
     await _apiService.clearToken();
   }
   
-  // Get stored token
+  // Get stored token with retry logic
   Future<String?> getToken() async {
-    return await _storage.read(key: 'userToken');
+    try {
+      // Try multiple times to handle potential race conditions
+      for (int i = 0; i < 3; i++) {
+        final token = await _storage.read(key: 'userToken');
+        if (token != null && token.isNotEmpty) {
+          debugPrint('[BackendAuth] ✅ getToken: Token retrieved, length: ${token.length}');
+          return token;
+        }
+        
+        if (i < 2) {
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+      }
+      
+      debugPrint('[BackendAuth] ❌ getToken: No token found after retries');
+      return null;
+    } catch (e) {
+      debugPrint('[BackendAuth] ❌ Error getting token: $e');
+      return null;
+    }
   }
 }
 

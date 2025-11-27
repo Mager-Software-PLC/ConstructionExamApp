@@ -32,8 +32,8 @@ class NotificationService {
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
-      // Create notification channel for Android
-      const androidChannel = AndroidNotificationChannel(
+      // Create notification channels for Android
+      const examChannel = AndroidNotificationChannel(
         'construction_exam_channel',
         'Construction Exam Notifications',
         description: 'Notifications for exam updates and reminders',
@@ -42,10 +42,22 @@ class NotificationService {
         enableVibration: true,
       );
 
-      await _localNotifications
+      const messageChannel = AndroidNotificationChannel(
+        'construction_exam_messages',
+        'Message Notifications',
+        description: 'Notifications for new messages from support',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      );
+
+      final androidImplementation = _localNotifications
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(androidChannel);
+              AndroidFlutterLocalNotificationsPlugin>();
+      
+      await androidImplementation?.createNotificationChannel(examChannel);
+      await androidImplementation?.createNotificationChannel(messageChannel);
 
       _initialized = true;
     } catch (e) {
@@ -63,19 +75,30 @@ class NotificationService {
     required String title,
     required String body,
     String? payload,
+    bool isMessage = false,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
-      'construction_exam_channel',
-      'Construction Exam Notifications',
-      channelDescription: 'Notifications for exam updates and reminders',
+    final androidDetails = AndroidNotificationDetails(
+      isMessage ? 'construction_exam_messages' : 'construction_exam_channel',
+      isMessage ? 'Message Notifications' : 'Construction Exam Notifications',
+      channelDescription: isMessage 
+          ? 'Notifications for new messages from support'
+          : 'Notifications for exam updates and reminders',
       importance: Importance.high,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
+      showWhen: true,
+      when: DateTime.now().millisecondsSinceEpoch,
+      enableVibration: true,
+      playSound: true,
     );
 
-    const iosDetails = DarwinNotificationDetails();
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
 
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );

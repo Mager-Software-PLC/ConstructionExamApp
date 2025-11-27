@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/screenshot_protection_service.dart';
 import '../models/api_models.dart';
 import 'admin_question_edit_screen.dart';
 import 'admin_users_screen.dart';
@@ -22,10 +23,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Enable screenshot protection for admin dashboard
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenshotProtectionService().enableProtection();
       final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
       questionProvider.loadQuestions();
     });
+  }
+
+  @override
+  void dispose() {
+    // Disable screenshot protection when leaving admin dashboard
+    ScreenshotProtectionService().disableProtection();
+    super.dispose();
   }
 
   @override

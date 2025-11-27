@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../models/api_models.dart';
 import '../l10n/app_localizations.dart';
+import '../services/screenshot_protection_service.dart';
 
 class CertificateScreen extends StatefulWidget {
   final User user;
@@ -17,6 +18,22 @@ class CertificateScreen extends StatefulWidget {
 
 class _CertificateScreenState extends State<CertificateScreen> {
   bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Enable screenshot protection for certificate screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenshotProtectionService().enableProtection();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Disable screenshot protection when leaving certificate screen
+    ScreenshotProtectionService().disableProtection();
+    super.dispose();
+  }
 
   Future<pw.Document> _generateCertificatePDF(AppLocalizations l10n) async {
     final pdf = pw.Document();

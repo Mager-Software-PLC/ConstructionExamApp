@@ -198,7 +198,7 @@ class _ProgressScreenState extends State<ProgressScreen> with AutomaticKeepAlive
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.green,
+                        color: Colors.green.withOpacity(0.7),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(

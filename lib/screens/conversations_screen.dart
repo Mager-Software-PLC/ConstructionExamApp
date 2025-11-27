@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/message_provider.dart';
+import '../services/backend_auth_service.dart';
 import '../l10n/app_localizations.dart';
 import 'chat_screen.dart';
 
@@ -203,6 +204,21 @@ class _ConversationsScreenState extends State<ConversationsScreen> with Automati
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          // Verify token exists before creating conversation
+          final backendAuthService = BackendAuthService();
+          final hasToken = await backendAuthService.isLoggedIn();
+          if (!hasToken) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please login to start a conversation'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
+          
           final conversation = await messageProvider.createConversation();
           if (conversation != null && mounted) {
             Navigator.of(context).push(

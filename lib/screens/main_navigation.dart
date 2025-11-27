@@ -1,6 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import '../providers/auth_provider.dart';
+import '../providers/message_provider.dart';
+import '../services/backend_auth_service.dart';
 import 'home_screen.dart';
 import 'categories_screen.dart';
 import 'progress_screen.dart';
@@ -16,6 +22,8 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
+  bool _isLoading = true;
+  bool _hasToken = false;
 
   // Screens are created once and preserved for fast navigation
   late final List<Widget> _screens;
@@ -30,11 +38,170 @@ class _MainNavigationState extends State<MainNavigation> {
       const MessagesScreen(),
       const ProfileScreen(),
     ];
+    _ensureUserLoaded();
+  }
+
+  Future<void> _ensureUserLoaded() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final backendAuthService = BackendAuthService();
+    
+    // Small delay to ensure storage is ready
+    await Future.delayed(const Duration(milliseconds: 200));
+    
+    // If user is already authenticated and loaded, skip check
+    if (authProvider.isAuthenticated && authProvider.user != null) {
+      debugPrint('[MainNavigation] ✅ User already authenticated, skipping check');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasToken = true;
+        });
+      }
+      return;
+    }
+    
+    // Check if token exists with retry
+    bool hasToken = false;
+    String? actualToken;
+    
+    for (int i = 0; i < 3; i++) {
+      hasToken = await backendAuthService.isLoggedIn();
+      if (hasToken) {
+        actualToken = await backendAuthService.getToken();
+        if (actualToken != null && actualToken.isNotEmpty) {
+          debugPrint('[MainNavigation] ✅ Token verified: exists and retrievable, length: ${actualToken.length}');
+          break;
+        } else {
+          debugPrint('[MainNavigation] ⚠️ isLoggedIn returned true but token is null, retrying...');
+          hasToken = false;
+        }
+      }
+      
+      if (i < 2) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _hasToken = hasToken;
+      });
+    }
+    
+    if (hasToken) {
+      debugPrint('[MainNavigation] ✅ Token exists, allowing access');
+      
+      // Token exists - allow user to stay even if loading fails temporarily
+      // Only redirect if we get a clear 401/Unauthorized error
+      if (!authProvider.isAuthenticated || authProvider.user == null) {
+        debugPrint('[MainNavigation] Token exists but user not loaded, attempting to load user...');
+        try {
+          // Use timeout to prevent hanging
+          await authProvider.loadUserFromToken().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('[MainNavigation] ⚠️ User loading timeout - allowing user to stay (token exists)');
+              // Don't throw - allow user to stay if token exists
+            },
+          );
+          
+          // Only redirect if we get a clear authentication error (401)
+          if (!authProvider.isAuthenticated || authProvider.user == null) {
+            debugPrint('[MainNavigation] User still not loaded after attempt, but token exists - allowing access');
+            // Don't redirect immediately - allow user to stay if token exists
+            // The app will work in offline mode or retry later
+          } else {
+            debugPrint('[MainNavigation] ✅ User loaded successfully: ${authProvider.user!.id}');
+          }
+        } catch (e) {
+          debugPrint('[MainNavigation] Error loading user: $e');
+          // Only redirect on clear auth errors (401), not on network errors
+          if (e.toString().contains('401') || 
+              e.toString().contains('Unauthorized') ||
+              e.toString().contains('Invalid token')) {
+            // Clear auth error - token is invalid
+            debugPrint('[MainNavigation] ❌ Token is invalid (401), redirecting to login');
+            if (mounted) {
+              await authProvider.logout();
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/auth',
+                (route) => false,
+              );
+              return;
+            }
+          } else {
+            // Network or other error - allow user to stay if token exists
+            debugPrint('[MainNavigation] ⚠️ Network error but token exists - allowing user to stay');
+          }
+        }
+      } else {
+        debugPrint('[MainNavigation] ✅ User already authenticated: ${authProvider.user!.id}');
+      }
+      
+      // Set user ID in MessageProvider for notification logic
+      if (authProvider.user != null) {
+        final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+        messageProvider.setCurrentUserId(authProvider.user!.id);
+        debugPrint('[MainNavigation] ✅ User ID set in MessageProvider: ${authProvider.user!.id}');
+      }
+    } else {
+      // No token, redirect to login
+      debugPrint('[MainNavigation] ❌ No token found after retries, redirecting to login');
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/auth',
+          (route) => false,
+        );
+        return;
+      }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    // Show loading while ensuring user is authenticated
+    if (_isLoading) {
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // If user is not authenticated after loading, check if token exists
+    // If token exists, allow user to stay (might be network issue)
+    if (!authProvider.isAuthenticated || authProvider.user == null) {
+      if (!_hasToken) {
+        // No token - show loading (will redirect in _ensureUserLoaded)
+        debugPrint('[MainNavigation] No token found in state - showing loading');
+        return Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        );
+      } else {
+        // Token exists but user not loaded - might be network issue
+        // Allow user to stay and try to use the app
+        debugPrint('[MainNavigation] Token exists (state: $_hasToken) but user not loaded - allowing access');
+      }
+    }
 
     return Scaffold(
       body: IndexedStack(

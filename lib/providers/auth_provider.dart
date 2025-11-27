@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../services/backend_auth_service.dart';
 import '../services/session_service.dart';
 import '../models/api_models.dart';
@@ -34,22 +35,84 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> _init() async {
     try {
-      // Check if user is logged in
+      debugPrint('[Auth] Initializing AuthProvider...');
+      
+      // Check if user is logged in by verifying token exists
       final isLoggedIn = await _authService.isLoggedIn();
+      debugPrint('[Auth] Token exists: $isLoggedIn');
       
       if (isLoggedIn) {
-        // Load user data from API
-        final result = await _authService.getCurrentUser();
-        if (result['success'] == true && result['user'] != null) {
-          _user = User.fromJson(result['user']);
-          await _sessionService.saveSession(
-            _user!.id,
-            rememberMe: true,
-            email: _user!.email,
+        try {
+          // Get token to verify it's valid
+          final token = await _authService.getToken();
+          if (token == null || token.isEmpty) {
+            debugPrint('[Auth] ⚠️ Token is null or empty');
+            _isSessionValid = false;
+            _isInitialized = true;
+            if (!_initCompleter.isCompleted) {
+              _initCompleter.complete();
+            }
+            notifyListeners();
+            return;
+          }
+          
+          debugPrint('[Auth] Token found, length: ${token.length}');
+          
+          // Try to load user data from API to verify token is still valid
+          // Use timeout to prevent hanging on network issues
+          debugPrint('[Auth] Loading user from API...');
+          final result = await _authService.getCurrentUser().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('[Auth] ⚠️ Timeout loading user - network issue, but token exists');
+              return {'success': false, 'message': 'Network timeout'};
+            },
           );
-          await _sessionService.refreshSession();
-          _isSessionValid = true;
+          
+          if (result['success'] == true && result['user'] != null) {
+            _user = User.fromJson(result['user']);
+            debugPrint('[Auth] ✅ User loaded successfully: ${_user!.id}');
+            
+            // Save session for persistence
+            await _sessionService.saveSession(
+              _user!.id,
+              rememberMe: true,
+              email: _user!.email,
+            );
+            await _sessionService.refreshSession();
+            _isSessionValid = true;
+            debugPrint('[Auth] ✅ Session saved and validated - login will persist');
+          } else {
+            debugPrint('[Auth] ⚠️ Failed to load user: ${result['message']}');
+            // Check if it's a 401 (unauthorized) - only then is token invalid
+            final errorMessage = result['message']?.toString() ?? '';
+            if (errorMessage.contains('401') || errorMessage.contains('Unauthorized') || errorMessage.contains('Invalid token')) {
+              debugPrint('[Auth] ❌ Token is invalid (401), will be cleared');
+              _isSessionValid = false;
+              // Don't clear token here - let splash screen handle it after confirmation
+            } else {
+              // Network error or other issue - token might still be valid
+              // Set session as potentially valid (will be verified later)
+              debugPrint('[Auth] ⚠️ Network/API error, but token exists - assuming valid for now');
+              _isSessionValid = true; // Assume valid until proven otherwise
+            }
+          }
+        } catch (e) {
+          debugPrint('[Auth] ⚠️ Error loading user: $e');
+          final errorStr = e.toString();
+          // Only mark as invalid if it's clearly an auth error
+          if (errorStr.contains('401') || errorStr.contains('Unauthorized') || errorStr.contains('Invalid token')) {
+            debugPrint('[Auth] ❌ Token is invalid based on error');
+            _isSessionValid = false;
+          } else {
+            // Network or other error - assume token is still valid
+            debugPrint('[Auth] ⚠️ Network/other error, but token exists - assuming valid');
+            _isSessionValid = true; // Assume valid until proven otherwise
+          }
         }
+      } else {
+        debugPrint('[Auth] No token found');
+        _isSessionValid = false;
       }
       
       _isInitialized = true;
@@ -58,7 +121,9 @@ class AuthProvider with ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
+      debugPrint('[Auth] Initialization error: $e');
       _errorMessage = e.toString();
+      _isSessionValid = false;
       _isInitialized = true;
       if (!_initCompleter.isCompleted) {
         _initCompleter.complete();
@@ -139,13 +204,25 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (result['success'] == true) {
-        _user = User.fromJson(result['user']);
-        await _sessionService.saveSession(
-          _user!.id,
-          rememberMe: true,
-          email: _user!.email,
-        );
-        _isSessionValid = true;
+        // Registration might not return token immediately (email verification required)
+        // But we should still have user data
+        if (result['user'] != null) {
+          _user = User.fromJson(result['user']);
+          // Only save session if we have a token (auto-login after registration)
+          if (result['token'] != null) {
+            await _sessionService.saveSession(
+              _user!.id,
+              rememberMe: true,
+              email: _user!.email,
+            );
+            _isSessionValid = true;
+          }
+        } else {
+          _errorMessage = 'Registration successful but user data not received';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
         _isLoading = false;
         notifyListeners();
         return true;
@@ -177,33 +254,57 @@ class AuthProvider with ChangeNotifier {
         password: password,
       );
 
-      if (result['success'] == true) {
+      if (result['success'] == true && result['user'] != null) {
+        // Parse user data
         _user = User.fromJson(result['user']);
+        debugPrint('[Auth] User parsed: ${_user!.id}, email: ${_user!.email}');
         
-        // Small delay to ensure token is saved
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Wait a bit longer to ensure token is saved by API service
+        await Future.delayed(const Duration(milliseconds: 500));
         
         // Verify token was saved (it should be saved in api_service.login)
         final hasToken = await _authService.isLoggedIn();
+        debugPrint('[Auth] Token check after login: $hasToken');
+        
         if (!hasToken) {
-          print('[Auth] Error: Token not found after login. Token should have been saved in api_service.login');
+          debugPrint('[Auth] ❌ Error: Token not found after login. Token should have been saved in api_service.login');
           _errorMessage = 'Failed to save authentication token. Please try logging in again.';
           _isLoading = false;
           notifyListeners();
           return false;
         }
         
-        print('[Auth] Login successful, token verified. User ID: ${_user!.id}');
+        // Double-check token is actually stored
+        final token = await _authService.getToken();
+        if (token == null || token.isEmpty) {
+          debugPrint('[Auth] ❌ Error: Token verification failed - token is null or empty');
+          _errorMessage = 'Failed to save authentication token. Please try logging in again.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
         
-        await _sessionService.saveSession(
-          _user!.id,
-          rememberMe: true,
-          email: _user!.email,
-        );
-        await _sessionService.refreshSession();
+        debugPrint('[Auth] ✅ Login successful, token verified. User ID: ${_user!.id}, Token length: ${token.length}');
+        
+        // Save session for persistence with user data
+        try {
+          await _sessionService.saveSession(
+            _user!.id,
+            rememberMe: true,
+            email: _user!.email,
+          );
+          await _sessionService.refreshSession();
+          debugPrint('[Auth] ✅ Session saved successfully');
+        } catch (e) {
+          debugPrint('[Auth] ⚠️ Error saving session: $e');
+          // Continue anyway - token is saved which is more important
+        }
+        
         _isSessionValid = true;
         _isLoading = false;
         notifyListeners();
+        
+        debugPrint('[Auth] ✅ Login complete. User will remain logged in after app restart.');
         return true;
       } else {
         _errorMessage = result['message'] ?? 'Login failed';
@@ -268,13 +369,25 @@ class AuthProvider with ChangeNotifier {
   // Method to set user from token (for auto-login)
   Future<void> loadUserFromToken() async {
     try {
+      debugPrint('[Auth] loadUserFromToken called');
       _isLoading = true;
       notifyListeners();
 
-      // First verify token exists
-      final hasToken = await _authService.isLoggedIn();
+      // First verify token exists - try multiple times
+      bool hasToken = false;
+      for (int i = 0; i < 3; i++) {
+        hasToken = await _authService.isLoggedIn();
+        if (hasToken) {
+          debugPrint('[Auth] ✅ Token found on attempt ${i + 1}');
+          break;
+        }
+        if (i < 2) {
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+      }
+      
       if (!hasToken) {
-        print('[Auth] No token found for auto-login');
+        debugPrint('[Auth] ❌ No token found for auto-login after retries');
         _user = null;
         _isSessionValid = false;
         _isLoading = false;
@@ -282,7 +395,28 @@ class AuthProvider with ChangeNotifier {
         return;
       }
 
-      final result = await _authService.getCurrentUser();
+      // Get the actual token to verify it's valid
+      final token = await _authService.getToken();
+      if (token == null || token.isEmpty) {
+        debugPrint('[Auth] Token is null or empty');
+        _user = null;
+        _isSessionValid = false;
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      debugPrint('[Auth] Token found, length: ${token.length}, attempting to load user...');
+      
+      // Use timeout to prevent hanging
+      final result = await _authService.getCurrentUser().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('[Auth] Timeout loading user from token');
+          return {'success': false, 'message': 'Network timeout'};
+        },
+      );
+      
       if (result['success'] == true && result['user'] != null) {
         _user = User.fromJson(result['user']);
         await _sessionService.saveSession(
@@ -290,22 +424,55 @@ class AuthProvider with ChangeNotifier {
           rememberMe: true,
           email: _user!.email,
         );
+        await _sessionService.refreshSession();
         _isSessionValid = true;
-        print('[Auth] Auto-login successful for user: ${_user!.id}');
+        debugPrint('[Auth] ✅ Auto-login successful for user: ${_user!.id}');
       } else {
-        print('[Auth] Auto-login failed: ${result['message']}');
-        _user = null;
-        _isSessionValid = false;
+        final errorMessage = result['message']?.toString() ?? '';
+        debugPrint('[Auth] Auto-login failed: $errorMessage');
+        
+        // Check if it's an authentication error (401) - token is invalid
+        if (errorMessage.contains('401') || 
+            errorMessage.contains('Unauthorized') || 
+            errorMessage.contains('Invalid token') ||
+            errorMessage.contains('Token expired')) {
+          debugPrint('[Auth] ❌ Token is invalid - will be cleared');
+          _user = null;
+          _isSessionValid = false;
+          // Clear token - it's invalid
+          await _authService.logout();
+        } else {
+          // Network or other error - don't clear token, might be temporary
+          debugPrint('[Auth] ⚠️ Network/API error - token might still be valid');
+          // Keep user as null but don't mark session as invalid yet
+          _isSessionValid = false;
+        }
       }
 
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      print('[Auth] Auto-login error: $e');
-      _errorMessage = e.toString();
+      debugPrint('[Auth] Auto-login error: $e');
+      final errorStr = e.toString();
+      
+      // Check if it's an authentication error
+      if (errorStr.contains('401') || 
+          errorStr.contains('Unauthorized') || 
+          errorStr.contains('Invalid token') ||
+          errorStr.contains('Token expired')) {
+        debugPrint('[Auth] ❌ Token is invalid based on exception');
+        _user = null;
+        _isSessionValid = false;
+        // Clear invalid token
+        await _authService.logout();
+      } else {
+        // Network or other error - don't clear token
+        debugPrint('[Auth] ⚠️ Network/other error - token might still be valid');
+        _isSessionValid = false;
+      }
+      
+      _errorMessage = errorStr;
       _isLoading = false;
-      _user = null;
-      _isSessionValid = false;
       notifyListeners();
     }
   }

@@ -29,8 +29,13 @@ class SoundService {
     if (!_soundEnabled) return;
     
     try {
-      // Use system sound for notification
+      // Play a pleasant two-tone notification sound
+      // First tone
       await SystemSound.play(SystemSoundType.alert);
+      // Small delay
+      await Future.delayed(const Duration(milliseconds: 100));
+      // Second tone (using click for variation)
+      await SystemSound.play(SystemSoundType.click);
     } catch (e) {
       debugPrint('Error playing message sound: $e');
     }

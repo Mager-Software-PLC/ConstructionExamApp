@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'categories_screen.dart';
 import 'certificate_screen.dart';
+import 'materials_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,12 +48,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     final questionProvider = Provider.of<QuestionProvider>(context);
     final user = authProvider.user;
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
 
     if (user == null || _isLoading) {
       return Scaffold(
+        backgroundColor: theme.colorScheme.background,
         body: Center(
           child: CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
+            color: theme.colorScheme.primary,
           ),
         ),
       );
@@ -65,34 +68,88 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     final canGenerateCertificate = progressPercentage >= 50.0;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: theme.colorScheme.background,
       body: RefreshIndicator(
         onRefresh: _loadProgress,
+        color: theme.colorScheme.primary,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // Modern App Bar with gradient
             SliverAppBar(
-              expandedHeight: 120,
+              expandedHeight: 180,
               floating: false,
               pinned: true,
               elevation: 0,
-              backgroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.transparent,
               flexibleSpace: FlexibleSpaceBar(
-                title: Text(
-                  l10n.translate('home'),
-                  style: AppTypography.titleLarge.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        theme.colorScheme.primary.withOpacity(0.8),
+                        theme.colorScheme.primary.withOpacity(0.6),
+                        theme.colorScheme.secondary.withOpacity(0.4),
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    l10n.translate('welcome_back'),
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      color: Colors.white.withOpacity(0.9),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    user.name,
+                                    style: AppTypography.headlineSmall.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 22,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.notifications_outlined,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                centerTitle: false,
-                titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.white),
-                  onPressed: _loadProgress,
-                ),
-              ],
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -100,18 +157,38 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildWelcomeCard(context, user.name, l10n),
+                    // Progress Card - Modern Design
+                    _buildModernProgressCard(
+                      context,
+                      progressPercentage,
+                      totalAttempted,
+                      questionProvider.totalQuestions,
+                      l10n,
+                      theme,
+                    ),
+                    const SizedBox(height: 20),
+                    // Quick Stats Grid
+                    _buildStatsGrid(
+                      context,
+                      correctAnswers,
+                      wrongAnswers,
+                      totalAttempted,
+                      l10n,
+                      theme,
+                    ),
                     const SizedBox(height: 24),
-                    _buildProgressCard(context, progressPercentage, totalAttempted, questionProvider.totalQuestions, l10n),
+                    // Start Practice Button - Large and Prominent
+                    _buildModernPracticeButton(context, l10n, theme),
                     const SizedBox(height: 24),
-                    _buildStatsCard(context, correctAnswers, wrongAnswers, totalAttempted, l10n),
-                    const SizedBox(height: 24),
-                    _buildPracticeButton(context, l10n),
-                    if (canGenerateCertificate) ...[
-                      const SizedBox(height: 24),
-                      _buildCertificateCard(context, user, progressPercentage, l10n),
-                    ],
-                    const SizedBox(height: 24),
+                    // Quick Actions
+                    Text(
+                      l10n.translate('quick_actions'),
+                      style: AppTypography.titleLarge.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildQuickActions(context, l10n, theme, canGenerateCertificate, user, progressPercentage),
                   ],
                 ),
               ),
@@ -122,242 +199,242 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  Widget _buildWelcomeCard(BuildContext context, String userName, AppLocalizations l10n) {
+  Widget _buildModernProgressCard(
+    BuildContext context,
+    double progress,
+    int attempted,
+    int total,
+    AppLocalizations l10n,
+    ThemeData theme,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withOpacity(0.8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            color: theme.colorScheme.shadow.withOpacity(0.1),
             blurRadius: 20,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.person_outline,
-              color: Colors.white,
-              size: 32,
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.translate('welcome_back'),
-                  style: AppTypography.bodyLarge.copyWith(
-                    color: Colors.white.withOpacity(0.9),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  userName,
-                  style: AppTypography.headlineSmall.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressCard(BuildContext context, double progress, int attempted, int total, AppLocalizations l10n) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  l10n.translate('your_progress'),
-                  style: AppTypography.titleLarge.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${progress.toStringAsFixed(0)}%',
-                    style: AppTypography.titleMedium.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: LinearProgressIndicator(
-                value: progress / 100,
-                minHeight: 16,
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).colorScheme.primary,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.translate('your_progress'),
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '$attempted / $total ${l10n.translate('questions')}',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      theme.colorScheme.primary.withOpacity(0.2),
+                      theme.colorScheme.primary.withOpacity(0.1),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${progress.toStringAsFixed(0)}%',
+                  style: AppTypography.titleMedium.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
                 ),
-                Text(
-                  '${(progress / 100 * total).toStringAsFixed(0)} ${l10n.translate('completed')}',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Stack(
+            children: [
+              Container(
+                height: 20,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: progress / 100,
+                child: Container(
+                  height: 20,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        theme.colorScheme.primary,
+                        theme.colorScheme.primary.withOpacity(0.7),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.quiz_outlined,
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$attempted / $total ${l10n.translate('questions')}',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                '${(progress / 100 * total).toStringAsFixed(0)} ${l10n.translate('completed')}',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatsCard(BuildContext context, int correct, int wrong, int attempted, AppLocalizations l10n) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildStatItem(
-              context,
-              Icons.check_circle,
-              l10n.translate('correct'),
-              '$correct',
-              Colors.green,
-            ),
-            Container(
-              width: 1,
-              height: 60,
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-            ),
-            _buildStatItem(
-              context,
-              Icons.cancel,
-              l10n.translate('wrong'),
-              '$wrong',
-              Colors.red,
-            ),
-            Container(
-              width: 1,
-              height: 60,
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-            ),
-            _buildStatItem(
-              context,
-              Icons.quiz_outlined,
-              l10n.translate('attempted'),
-              '$attempted',
-              Theme.of(context).colorScheme.primary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(BuildContext context, IconData icon, String label, String value, Color color) {
-    return Column(
+  Widget _buildStatsGrid(
+    BuildContext context,
+    int correct,
+    int wrong,
+    int attempted,
+    AppLocalizations l10n,
+    ThemeData theme,
+  ) {
+    return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: color, size: 28),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          value,
-          style: AppTypography.titleMedium.copyWith(
-            color: color,
-            fontWeight: FontWeight.bold,
+        Expanded(
+          child: _buildStatCard(
+            context,
+            Icons.check_circle_rounded,
+            l10n.translate('correct'),
+            '$correct',
+            theme.colorScheme.primary.withOpacity(0.15),
+            theme.colorScheme.primary,
+            theme,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: AppTypography.labelSmall.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildStatCard(
+            context,
+            Icons.cancel_rounded,
+            l10n.translate('wrong'),
+            '$wrong',
+            Colors.red.withOpacity(0.15),
+            Colors.red,
+            theme,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildStatCard(
+            context,
+            Icons.quiz_rounded,
+            l10n.translate('attempted'),
+            '$attempted',
+            theme.colorScheme.secondary.withOpacity(0.15),
+            theme.colorScheme.secondary,
+            theme,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPracticeButton(BuildContext context, AppLocalizations l10n) {
+  Widget _buildStatCard(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    Color bgColor,
+    Color iconColor,
+    ThemeData theme,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: iconColor.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: iconColor, size: 28),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: AppTypography.titleMedium.copyWith(
+              color: iconColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.7),
+              fontSize: 11,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernPracticeButton(BuildContext context, AppLocalizations l10n, ThemeData theme) {
     return Container(
       width: double.infinity,
-      height: 70,
+      height: 72,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withOpacity(0.8),
+            theme.colorScheme.primary,
+            theme.colorScheme.primary.withOpacity(0.8),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
+            color: theme.colorScheme.primary.withOpacity(0.4),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -373,19 +450,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               ),
             );
           },
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 28),
+                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 16),
                 Text(
@@ -393,10 +470,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   style: AppTypography.titleLarge.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward, color: Colors.white, size: 24),
+                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 24),
               ],
             ),
           ),
@@ -405,29 +483,94 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  Widget _buildCertificateCard(BuildContext context, user, double progress, AppLocalizations l10n) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: Colors.green.withOpacity(0.3),
-          width: 2,
+  Widget _buildQuickActions(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+    bool canGenerateCertificate,
+    user,
+    double progress,
+  ) {
+    return Column(
+      children: [
+        // Materials Card
+        _buildActionCard(
+          context,
+          icon: Icons.description_rounded,
+          title: l10n.translate('materials'),
+          subtitle: 'Study materials and resources',
+          gradient: [
+            theme.colorScheme.secondary.withOpacity(0.8),
+            theme.colorScheme.secondary.withOpacity(0.6),
+          ],
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const MaterialsScreen(),
+              ),
+            );
+          },
+          theme: theme,
         ),
+        if (canGenerateCertificate) ...[
+          const SizedBox(height: 16),
+          _buildActionCard(
+            context,
+            icon: Icons.verified_rounded,
+            title: l10n.translate('certificate_ready'),
+            subtitle: l10n.translate('view_download_certificate'),
+            gradient: [
+              Colors.green.withOpacity(0.3),
+              Colors.green.withOpacity(0.2),
+            ],
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => CertificateScreen(
+                    user: user,
+                    progressPercentage: progress,
+                  ),
+                ),
+              );
+            },
+            theme: theme,
+            accentColor: Colors.green.withOpacity(0.3),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildActionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Color> gradient,
+    required VoidCallback onTap,
+    required ThemeData theme,
+    Color? accentColor,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: (accentColor ?? theme.colorScheme.primary).withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => CertificateScreen(
-                  user: user,
-                  progressPercentage: progress,
-                ),
-              ),
-            );
-          },
+          onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -436,14 +579,21 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    gradient: LinearGradient(
+                      colors: gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (accentColor ?? theme.colorScheme.primary).withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: const Icon(
-                    Icons.verified,
-                    color: Colors.green,
-                    size: 32,
-                  ),
+                  child: Icon(icon, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 20),
                 Expanded(
@@ -451,26 +601,25 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        l10n.translate('certificate_ready'),
+                        title,
                         style: AppTypography.titleMedium.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.green,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        l10n.translate('view_download_certificate'),
+                        subtitle,
                         style: AppTypography.bodySmall.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                          color: theme.colorScheme.onSurface.withOpacity(0.7),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  color: Colors.green,
-                  size: 20,
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: (accentColor ?? theme.colorScheme.primary).withOpacity(0.6),
+                  size: 18,
                 ),
               ],
             ),

@@ -2,28 +2,30 @@ import 'package:flutter/material.dart';
 
 // App color constants
 class AppColors {
-  // Light theme colors
-  static const Color lightPrimary = Color(0xFF1E3A8A);
+  // Light theme colors - Dark Green theme
+  static const Color lightPrimary = Color(0xFF1B5E20); // Material Green 900 - Darker green
+  static const Color lightPrimaryVariant = Color(0xFF2E7D32); // Material Green 800 - Dark green
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightBackground = Color(0xFFF5F5F5);
+  static const Color lightBackground = Color(0xFFF1F8F4); // Light greenish tint
   static const Color lightOnSurface = Color(0xFF1F1F1F);
   
-  // Dark theme colors (gray)
-  static const Color darkPrimary = Color(0xFF9CA3AF);
-  static const Color darkSurface = Color(0xFF1F2937);
-  static const Color darkBackground = Color(0xFF111827);
-  static const Color darkOnSurface = Color(0xFFF9FAFB);
+  // Dark theme colors - Dark Green theme
+  static const Color darkPrimary = Color(0xFF388E3C); // Material Green 700 - Darker green
+  static const Color darkPrimaryVariant = Color(0xFF43A047); // Material Green 600 - Medium-dark green
+  static const Color darkSurface = Color(0xFF1B2E1D); // Dark greenish surface
+  static const Color darkBackground = Color(0xFF0F1A10); // Very dark greenish background
+  static const Color darkOnSurface = Color(0xFFE8F5E9); // Light greenish text
   
   // Semantic colors (same for both themes)
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  static const Color success = Color(0xFF388E3C); // Darker green - will use with opacity
+  static const Color warning = Color(0xFFFF9800); // Orange
+  static const Color error = Color(0xFFEF4444); // Red
+  static const Color info = Color(0xFF2196F3); // Blue
   
   // Difficulty colors
-  static const Color difficultyEasy = Color(0xFF10B981);
-  static const Color difficultyMedium = Color(0xFFF59E0B);
-  static const Color difficultyHard = Color(0xFFEF4444);
+  static const Color difficultyEasy = Color(0xFF388E3C); // Darker green - will use with opacity
+  static const Color difficultyMedium = Color(0xFFFF9800); // Orange
+  static const Color difficultyHard = Color(0xFFEF4444); // Red
 }
 
 // Typography scale
@@ -166,15 +168,19 @@ class AppTheme {
   static ThemeData get lightTheme {
     final colorScheme = ColorScheme.light(
       primary: AppColors.lightPrimary,
-      secondary: AppColors.lightPrimary.withOpacity(0.8),
+      secondary: AppColors.lightPrimaryVariant,
+      tertiary: AppColors.lightPrimary.withOpacity(0.6),
       error: AppColors.error,
       surface: AppColors.lightSurface,
       background: AppColors.lightBackground,
       onPrimary: Colors.white,
       onSecondary: Colors.white,
+      onTertiary: Colors.white,
       onError: Colors.white,
       onSurface: AppColors.lightOnSurface,
       onBackground: AppColors.lightOnSurface,
+      primaryContainer: AppColors.lightPrimary.withOpacity(0.1),
+      secondaryContainer: AppColors.lightPrimaryVariant.withOpacity(0.1),
     );
 
     return ThemeData(
@@ -527,15 +533,19 @@ class AppTheme {
   static ThemeData get darkTheme {
     final colorScheme = ColorScheme.dark(
       primary: AppColors.darkPrimary,
-      secondary: AppColors.darkPrimary.withOpacity(0.8),
+      secondary: AppColors.darkPrimaryVariant,
+      tertiary: AppColors.darkPrimary.withOpacity(0.6),
       error: AppColors.error,
       surface: AppColors.darkSurface,
       background: AppColors.darkBackground,
-      onPrimary: AppColors.darkOnSurface,
-      onSecondary: AppColors.darkOnSurface,
+      onPrimary: AppColors.darkBackground,
+      onSecondary: AppColors.darkBackground,
+      onTertiary: AppColors.darkBackground,
       onError: Colors.white,
       onSurface: AppColors.darkOnSurface,
       onBackground: AppColors.darkOnSurface,
+      primaryContainer: AppColors.darkPrimary.withOpacity(0.2),
+      secondaryContainer: AppColors.darkPrimaryVariant.withOpacity(0.2),
     );
 
     return ThemeData(

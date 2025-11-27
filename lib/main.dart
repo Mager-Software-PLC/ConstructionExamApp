@@ -19,6 +19,7 @@ import 'services/notification_service.dart';
 import 'services/sound_service.dart';
 import 'services/session_service.dart';
 import 'services/backend_auth_service.dart';
+import 'services/socket_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -30,11 +31,51 @@ void main() async {
   // Initialize sound service
   await SoundService().initialize();
   
+  // Small delay to ensure Flutter Secure Storage is ready
+  await Future.delayed(const Duration(milliseconds: 100));
+  
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Import socket service
+    final socketService = SocketService();
+    
+    if (state == AppLifecycleState.resumed) {
+      // App came to foreground - reconnect socket if needed
+      debugPrint('📱 App resumed - checking socket connection...');
+      if (!socketService.isConnected && !socketService.isConnecting) {
+        debugPrint('🔄 Reconnecting socket after app resume...');
+        socketService.enableReconnection();
+      }
+    } else if (state == AppLifecycleState.paused) {
+      // App went to background - socket will auto-reconnect when needed
+      debugPrint('📱 App paused');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,8 +174,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkFirstLaunch() async {
-    // Minimal delay for UI smoothness
-    await Future.delayed(const Duration(milliseconds: 200));
+    // Longer delay to ensure Flutter Secure Storage is fully initialized
+    await Future.delayed(const Duration(milliseconds: 500));
     
     if (!mounted) return;
 
@@ -142,78 +183,142 @@ class _SplashScreenState extends State<SplashScreen> {
     final sessionService = SessionService();
     final backendAuthService = BackendAuthService();
     
-    // Check if token exists in persistent storage
-    final hasToken = await backendAuthService.isLoggedIn();
+    // Check if token exists in persistent storage (most reliable check)
+    // Try multiple times with longer delays to ensure we get the correct result
+    bool hasToken = false;
+    String? actualToken;
     
-    if (hasToken) {
-      debugPrint('Token found in storage, attempting auto-login...');
-      try {
-        // Wait for AuthProvider to initialize
-        await authProvider.waitForInitialization().timeout(
-          const Duration(seconds: 3),
-          onTimeout: () {
-            debugPrint('AuthProvider initialization timeout - continuing');
-          },
-        );
-        
-        // Try to load user from token
-        await authProvider.loadUserFromToken();
-        if (authProvider.isAuthenticated && authProvider.user != null && mounted) {
-          debugPrint('Auto-login successful: ${authProvider.user!.id}');
-          await AppInitializer.setLanguageSelected();
-          if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/home');
-          }
-          return;
+    for (int i = 0; i < 5; i++) {
+      hasToken = await backendAuthService.isLoggedIn();
+      if (hasToken) {
+        // Also verify we can actually get the token value
+        actualToken = await backendAuthService.getToken();
+        if (actualToken != null && actualToken.isNotEmpty) {
+          debugPrint('[Splash] ✅ Token verified: exists and retrievable, length: ${actualToken.length}');
+          break;
         } else {
-          // Token is invalid, clear it
-          debugPrint('Token invalid, clearing storage');
-          await backendAuthService.logout();
+          debugPrint('[Splash] ⚠️ isLoggedIn returned true but token is null/empty, retrying...');
+          hasToken = false;
         }
-      } catch (e) {
-        debugPrint('Auto-login failed: $e');
-        // Clear invalid token
-        await backendAuthService.logout();
+      }
+      
+      if (i < 4) {
+        await Future.delayed(const Duration(milliseconds: 300));
       }
     }
     
-    // Wait for AuthProvider to initialize
+    debugPrint('[Splash] Token check result: $hasToken (token length: ${actualToken?.length ?? 0})');
+    
+    // Wait for AuthProvider to initialize (with reasonable timeout)
     try {
       await authProvider.waitForInitialization().timeout(
-        const Duration(seconds: 2),
+        const Duration(seconds: 8),
         onTimeout: () {
-          debugPrint('AuthProvider initialization timeout - continuing');
+          debugPrint('[Splash] AuthProvider initialization timeout - continuing with token check');
         },
       );
     } catch (e) {
-      debugPrint('Error waiting for initialization: $e');
+      debugPrint('[Splash] Error waiting for initialization: $e');
     }
     
-    // Check if user is authenticated after initialization
-    if (authProvider.isAuthenticated && authProvider.user != null) {
-      debugPrint('User authenticated: ${authProvider.user!.id}');
+    // If token exists, try to load user first before navigating
+    if (hasToken) {
+      debugPrint('[Splash] ✅ Token found - loading user...');
+      
+      // Try to load user if not already loaded
+      if (!authProvider.isAuthenticated || authProvider.user == null) {
+        debugPrint('[Splash] User not loaded yet, attempting to load...');
+        try {
+          // Try to load user with timeout
+          await authProvider.loadUserFromToken().timeout(
+            const Duration(seconds: 8),
+            onTimeout: () {
+              debugPrint('[Splash] User loading timeout - checking if token is still valid');
+              // Don't navigate if user loading times out - might be network issue
+              // But also don't block forever - let MainNavigation handle it
+            },
+          );
+          
+          // Check if user was loaded successfully
+          if (!authProvider.isAuthenticated || authProvider.user == null) {
+            debugPrint('[Splash] User not loaded after attempt - but token exists, allowing navigation');
+            // Token exists but user not loaded - might be network issue
+            // Navigate anyway - MainNavigation will allow access if token exists
+          } else {
+            debugPrint('[Splash] ✅ User loaded successfully: ${authProvider.user!.id}');
+          }
+        } catch (e) {
+          debugPrint('[Splash] Error loading user: $e');
+          // Check if it's an auth error (401) - clear token and go to login
+          if (e.toString().contains('401') || 
+              e.toString().contains('Unauthorized') ||
+              e.toString().contains('Invalid token')) {
+            debugPrint('[Splash] Token is invalid (401), clearing and going to login');
+            await backendAuthService.logout();
+            await authProvider.logout();
+            if (mounted) {
+              await AppInitializer.setLanguageSelected();
+              Navigator.of(context).pushReplacementNamed('/auth');
+            }
+            return;
+          }
+          // For other errors (network, etc.), still navigate - MainNavigation will handle
+        }
+      } else {
+        debugPrint('[Splash] ✅ User already loaded: ${authProvider.user!.id}');
+      }
+      
+      // Navigate to home - MainNavigation will ensure user is authenticated
+      await AppInitializer.setLanguageSelected();
       if (mounted) {
-        await authProvider.refreshSession();
-        await AppInitializer.setLanguageSelected();
-        Navigator.of(context).pushReplacementNamed('/home');
+        debugPrint('[Splash] ✅ Navigating to home screen (token exists: $hasToken, token length: ${actualToken?.length ?? 0})');
+        // Ensure navigation happens
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/home');
+        }
       }
       return;
     }
     
-    // Check saved session
-    final savedSessionId = await sessionService.getSession();
-    if (savedSessionId != null) {
-      debugPrint('Found saved session: $savedSessionId');
-      try {
-        await authProvider.loadUserFromSession(savedSessionId);
-        if (authProvider.isAuthenticated && authProvider.user != null && mounted) {
-          await authProvider.refreshSession();
+    // No token found - check if user is authenticated (shouldn't happen, but check anyway)
+    if (authProvider.isAuthenticated && authProvider.user != null) {
+      debugPrint('[Splash] ✅ User authenticated but no token - checking token again...');
+      // Double-check token one more time
+      final finalTokenCheck = await backendAuthService.isLoggedIn();
+      if (finalTokenCheck) {
+        debugPrint('[Splash] ✅ Token found on final check, navigating to home');
+        if (mounted) {
           await AppInitializer.setLanguageSelected();
           Navigator.of(context).pushReplacementNamed('/home');
-          return;
         }
-      } catch (e) {
-        debugPrint('Failed to load user from saved session: $e');
+        return;
+      }
+      debugPrint('[Splash] ⚠️ User authenticated but no token found, will show login');
+    }
+    
+    // Check saved session as last resort (only if no token)
+    if (!hasToken) {
+      final savedSessionId = await sessionService.getSession();
+      if (savedSessionId != null) {
+        debugPrint('[Splash] Found saved session: $savedSessionId, attempting to load user...');
+        try {
+          await authProvider.loadUserFromSession(savedSessionId);
+          if (authProvider.isAuthenticated && authProvider.user != null && mounted) {
+            debugPrint('[Splash] ✅ User authenticated from session: ${authProvider.user!.id}');
+            // Verify token was created/restored
+            final tokenAfterSession = await backendAuthService.isLoggedIn();
+            if (tokenAfterSession) {
+              await AppInitializer.setLanguageSelected();
+              Navigator.of(context).pushReplacementNamed('/home');
+              return;
+            } else {
+              debugPrint('[Splash] ⚠️ User loaded from session but no token, will show login');
+            }
+          }
+        } catch (e) {
+          debugPrint('[Splash] Failed to load user from saved session: $e');
+        }
       }
     }
     
@@ -232,6 +337,7 @@ class _SplashScreenState extends State<SplashScreen> {
     } else {
       // Language already selected, show login
       if (mounted) {
+        debugPrint('[Splash] No valid authentication, showing login screen');
         Navigator.of(context).pushReplacementNamed('/auth');
       }
     }
