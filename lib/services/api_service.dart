@@ -123,31 +123,53 @@ class ApiService {
     bool requiresAuth = true,
   }) async {
     final url = Uri.parse('$baseUrl$endpoint');
+    
+    // Check if this is a public route (auth routes that don't need token)
+    final isPublicAuthRoute = endpoint == '/auth/login' ||
+                              endpoint == '/auth/register' ||
+                              endpoint.startsWith('/auth/send-otp') ||
+                              endpoint.startsWith('/auth/verify-otp') ||
+                              endpoint.startsWith('/auth/send-registration-otp') ||
+                              endpoint.startsWith('/auth/verify-registration-otp') ||
+                              endpoint.startsWith('/auth/forgot-password') ||
+                              endpoint.startsWith('/auth/reset-password') ||
+                              endpoint.startsWith('/auth/google') ||
+                              endpoint.startsWith('/auth/verify-email') ||
+                              endpoint.startsWith('/auth/test-credentials');
+    
     final requestHeaders = <String, String>{
       'Content-Type': 'application/json',
       ...?headers,
     };
     
-    if (requiresAuth) {
+    // Send Bearer token globally if:
+    // 1. Auth is required (requiresAuth = true)
+    // 2. It's NOT a public auth route
+    // 3. Token is available
+    if (requiresAuth && !isPublicAuthRoute) {
       final token = await _getToken();
       if (token != null && token.isNotEmpty) {
         requestHeaders['Authorization'] = 'Bearer $token';
-        debugPrint('[API] ✅ Token found for endpoint: $endpoint (length: ${token.length})');
+        debugPrint('[API] ✅ Bearer token added globally for endpoint: $endpoint (length: ${token.length})');
       } else {
-        debugPrint('[API] ❌ Error: Token is null or empty for endpoint: $endpoint');
         // Try to get token one more time with a small delay (in case of race condition)
         await Future.delayed(const Duration(milliseconds: 100));
         final retryToken = await _getToken();
         if (retryToken != null && retryToken.isNotEmpty) {
           requestHeaders['Authorization'] = 'Bearer $retryToken';
-          debugPrint('[API] ✅ Token found on retry for endpoint: $endpoint');
+          debugPrint('[API] ✅ Bearer token added on retry for endpoint: $endpoint');
         } else {
+          // Token required but not found
+          debugPrint('[API] ❌ Error: Token is null or empty for endpoint: $endpoint');
           throw ApiException(
             message: 'Authentication token not provided. Please login again.',
             statusCode: 401,
           );
         }
       }
+    } else {
+      // Don't send token for public auth routes or when explicitly not required
+      debugPrint('[API] ⏭️ Skipping Bearer token for endpoint: $endpoint (requiresAuth: $requiresAuth, isPublicAuthRoute: $isPublicAuthRoute)');
     }
     
     http.Response response;
@@ -256,7 +278,106 @@ class ApiService {
     
     return response;
   }
+
+  // Send registration OTP
+  Future<Map<String, dynamic>> sendRegistrationOTP({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    String? preferredLanguage,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/auth/send-registration-otp',
+      body: {
+        'name': name,
+        'email': email,
+        'password': password,
+        'phone': phone,
+        if (preferredLanguage != null) 'preferredLanguage': preferredLanguage,
+      },
+      requiresAuth: false,
+    );
+    
+    return response;
+  }
+
+  // Verify registration OTP
+  Future<Map<String, dynamic>> verifyRegistrationOTP({
+    required String phone,
+    required String code,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/auth/verify-registration-otp',
+      body: {
+        'phone': phone,
+        'code': code,
+      },
+      requiresAuth: false,
+    );
+    
+    if (response['success'] == true && response['data'] != null) {
+      final data = response['data'] as Map<String, dynamic>;
+      final token = data['token'] as String?;
+      final refreshToken = data['refreshToken'] as String?;
+
+      if (token != null && token.isNotEmpty) {
+        await _setToken(token);
+      }
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        await _setRefreshToken(refreshToken);
+      }
+    }
+    
+    return response;
+  }
   
+  Future<Map<String, dynamic>> googleSignIn({
+    required String idToken,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/auth/google',
+      body: {
+        'idToken': idToken,
+      },
+      requiresAuth: false,
+    );
+    
+    if (response['success'] == true && response['data'] != null) {
+      final data = response['data'] as Map<String, dynamic>;
+      final token = data['token'] as String?;
+      final refreshToken = data['refreshToken'] as String?;
+      
+      debugPrint('[API] Google sign-in response received. Token present: ${token != null}, RefreshToken present: ${refreshToken != null}');
+      
+      // Store access token
+      if (token != null && token.isNotEmpty) {
+        try {
+          await _setToken(token);
+          debugPrint('[API] ✅ Google sign-in token saved successfully to Flutter Secure Storage, length: ${token.trim().length}');
+        } catch (e) {
+          debugPrint('[API] ❌ Error saving Google sign-in token: $e');
+          throw Exception('Failed to save authentication token: $e');
+        }
+      } else {
+        debugPrint('[API] ❌ Error: No token in Google sign-in response data');
+        throw Exception('No token received in Google sign-in response');
+      }
+      
+      // Store refresh token if provided
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        await _setRefreshToken(refreshToken);
+      }
+      
+      return response;
+    }
+    
+    return response;
+  }
+
   Future<Map<String, dynamic>> login({
     required String emailOrPhone,
     required String password,
@@ -446,6 +567,10 @@ class ApiService {
     return await _request('GET', '/categories/$id', requiresAuth: false);
   }
   
+  Future<Map<String, dynamic>> getFirstCategoryAndStatus() async {
+    return await _request('GET', '/categories/first/status', requiresAuth: true);
+  }
+  
   // Question endpoints
   Future<Map<String, dynamic>> getQuestions({
     String? categoryId,
@@ -633,6 +758,18 @@ class ApiService {
   // Certificate endpoints
   Future<Map<String, dynamic>> getMyCertificate() async {
     return await _request('GET', '/certificates/my-certificate');
+  }
+  
+  Future<Map<String, dynamic>> getMyCertificateStatus() async {
+    return await _request('GET', '/certificates/my-certificate/status');
+  }
+  
+  Future<Map<String, dynamic>> generateMyCertificate({String? language}) async {
+    return await _request(
+      'POST',
+      '/certificates/generate',
+      body: language != null ? {'language': language} : {},
+    );
   }
   
   Future<Map<String, dynamic>> verifyCertificate(String certificateId) async {

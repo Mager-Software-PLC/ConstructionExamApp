@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/message_provider.dart';
+import '../providers/notification_provider.dart';
 import '../services/backend_auth_service.dart';
 import 'home_screen.dart';
 import 'categories_screen.dart';
@@ -143,6 +144,11 @@ class _MainNavigationState extends State<MainNavigation> {
         final messageProvider = Provider.of<MessageProvider>(context, listen: false);
         messageProvider.setCurrentUserId(authProvider.user!.id);
         debugPrint('[MainNavigation] ✅ User ID set in MessageProvider: ${authProvider.user!.id}');
+        
+        // Initialize notification provider
+        final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+        await notificationProvider.initialize();
+        debugPrint('[MainNavigation] ✅ Notification provider initialized');
       }
     } else {
       // No token, redirect to login

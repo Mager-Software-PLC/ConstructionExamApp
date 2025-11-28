@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:typed_data';
 import '../models/api_models.dart';
 import '../l10n/app_localizations.dart';
 import '../services/screenshot_protection_service.dart';
+import '../services/api_service.dart';
 
 class CertificateScreen extends StatefulWidget {
   final User user;
@@ -17,7 +21,11 @@ class CertificateScreen extends StatefulWidget {
 }
 
 class _CertificateScreenState extends State<CertificateScreen> {
+  bool _isLoading = true;
   bool _isGenerating = false;
+  Map<String, dynamic>? _certificateData;
+  Uint8List? _logoBytes;
+  Uint8List? _qrCodeBytes;
 
   @override
   void initState() {
@@ -25,6 +33,8 @@ class _CertificateScreenState extends State<CertificateScreen> {
     // Enable screenshot protection for certificate screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ScreenshotProtectionService().enableProtection();
+      _fetchCertificateData();
+      _loadLogo();
     });
   }
 
@@ -35,281 +45,230 @@ class _CertificateScreenState extends State<CertificateScreen> {
     super.dispose();
   }
 
+  Future<void> _loadLogo() async {
+    try {
+      // Load logo from assets
+      final ByteData logoData = await DefaultAssetBundle.of(context).load('assets/logo.png');
+      setState(() {
+        _logoBytes = logoData.buffer.asUint8List();
+      });
+    } catch (e) {
+      debugPrint('Failed to load logo: $e');
+    }
+  }
+
+  Future<void> _fetchCertificateData() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getMyCertificate();
+      
+      if (response['success'] == true && response['data'] != null) {
+        final certificates = response['data'] as List;
+        if (certificates.isNotEmpty) {
+          final cert = certificates[0] as Map<String, dynamic>;
+          
+          // Load QR code if available (it's a base64 data URL)
+          if (cert['qrCode'] != null) {
+            try {
+              final qrCodeString = cert['qrCode'] as String;
+              if (qrCodeString.startsWith('data:image')) {
+                // Extract base64 data
+                final base64Data = qrCodeString.split(',')[1];
+                setState(() {
+                  _qrCodeBytes = base64Decode(base64Data);
+                });
+              } else {
+                // It's a URL
+                final qrResponse = await http.get(Uri.parse(qrCodeString));
+                if (qrResponse.statusCode == 200) {
+                  setState(() {
+                    _qrCodeBytes = qrResponse.bodyBytes;
+                  });
+                }
+              }
+            } catch (e) {
+              debugPrint('Failed to load QR code: $e');
+            }
+          }
+          
+          setState(() {
+            _certificateData = cert;
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Failed to fetch certificate: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<pw.Document> _generateCertificatePDF(AppLocalizations l10n) async {
     final pdf = pw.Document();
-    final now = DateTime.now();
-    final dateStr = '${now.day}/${now.month}/${now.year}';
+    final cert = _certificateData;
+    final now = cert?['issuedAt'] != null 
+        ? DateTime.parse(cert!['issuedAt']) 
+        : DateTime.now();
+    final dateStr = '${now.day} ${_getMonthName(now.month)} ${now.year}';
+    final certificateId = cert?['certificateId'] ?? 'CERT-${widget.user.id.substring(0, 8).toUpperCase()}';
+    
+    // Cream color: #F5F5DC
+    final creamColor = PdfColor.fromHex('#F5F5DC');
+    // Gold color: #FFD700
+    final goldColor = PdfColor.fromHex('#FFD700');
+    final blackColor = PdfColors.black;
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
+        pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.all(0),
         build: (pw.Context context) {
-          return pw.Container(
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(
-                color: PdfColors.blue900,
-                width: 8,
-              ),
-            ),
-            child: pw.Stack(
+          return pw.Stack(
               children: [
-                // Background decoration
-                pw.Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
+              // Cream background
+              pw.Container(
+                color: creamColor,
                   child: pw.Container(
-                    height: 120,
+                  margin: const pw.EdgeInsets.all(40),
                     decoration: pw.BoxDecoration(
-                      gradient: pw.LinearGradient(
-                        colors: [
-                          PdfColor.fromHex('#1E3A8A'),
-                          PdfColor.fromHex('#3B82F6'),
-                        ],
-                      ),
-                    ),
+                    border: pw.Border.all(color: goldColor, width: 8),
                   ),
-                ),
-                pw.Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: pw.Container(
-                    height: 120,
-                    decoration: pw.BoxDecoration(
-                      gradient: pw.LinearGradient(
-                        begin: pw.Alignment.topCenter,
-                        end: pw.Alignment.bottomCenter,
-                        colors: [
-                          PdfColor.fromHex('#3B82F6'),
-                          PdfColor.fromHex('#1E3A8A'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                // Decorative corner elements
-                pw.Positioned(
-                  top: 40,
-                  left: 40,
-                  child: pw.Container(
-                    width: 80,
-                    height: 80,
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(
-                        color: PdfColors.blue900,
-                        width: 3,
-                      ),
-                    ),
-                    child: pw.Center(
-                      child: pw.Text(
-                        '✓',
-                        style: pw.TextStyle(
-                          fontSize: 50,
-                          color: PdfColors.blue900,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                pw.Positioned(
-                  top: 40,
-                  right: 40,
-                  child: pw.Container(
-                    width: 80,
-                    height: 80,
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(
-                        color: PdfColors.blue900,
-                        width: 3,
-                      ),
-                    ),
-                    child: pw.Center(
-                      child: pw.Text(
-                        '✓',
-                        style: pw.TextStyle(
-                          fontSize: 50,
-                          color: PdfColors.blue900,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                // Main content
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(60),
+                  child: pw.Padding(
+                    padding: const pw.EdgeInsets.all(50),
                   child: pw.Column(
                     mainAxisAlignment: pw.MainAxisAlignment.center,
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
-                      pw.SizedBox(height: 40),
+                        // Logo
+                        if (_logoBytes != null)
+                          pw.Image(
+                            pw.MemoryImage(_logoBytes!),
+                            width: 150,
+                            height: 150,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        pw.SizedBox(height: 20),
+                        
                       // Certificate Title
-                      pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
+                        pw.Text(
+                          'CERTIFICATE',
+                          style: pw.TextStyle(
+                            fontSize: 48,
+                            fontWeight: pw.FontWeight.bold,
+                            color: blackColor,
+                            letterSpacing: 3,
+                          ),
                         ),
-                        decoration: pw.BoxDecoration(
-                          color: PdfColors.blue900,
-                        ),
-                        child: pw.Text(
-                          l10n.translate('certificate_of_completion').toUpperCase(),
+                        pw.SizedBox(height: 10),
+                        pw.Text(
+                          'OF COMPLETION',
                           style: pw.TextStyle(
                             fontSize: 28,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.white,
+                            color: blackColor,
                             letterSpacing: 2,
                           ),
-                          textAlign: pw.TextAlign.center,
                         ),
-                      ),
-                      pw.SizedBox(height: 50),
-                      // Subtitle
+                        pw.SizedBox(height: 40),
+                        
+                        // This certificate is proudly presented to
                       pw.Text(
                         l10n.translate('this_is_to_certify'),
                         style: pw.TextStyle(
                           fontSize: 18,
-                          color: PdfColors.grey800,
-                          fontStyle: pw.FontStyle.italic,
+                            color: blackColor,
                         ),
                       ),
                       pw.SizedBox(height: 30),
-                      // Name
+                        
+                        // Recipient Name
                       pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 30,
-                          vertical: 15,
-                        ),
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                         decoration: pw.BoxDecoration(
-                          border: pw.Border.all(
-                            color: PdfColors.blue900,
-                            width: 2,
+                            border: pw.Border(
+                              bottom: pw.BorderSide(color: blackColor, width: 1),
                           ),
                         ),
                         child: pw.Text(
                           widget.user.name.toUpperCase(),
                           style: pw.TextStyle(
-                            fontSize: 32,
+                              fontSize: 36,
                             fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.blue900,
-                            letterSpacing: 1.5,
+                              color: goldColor,
+                              letterSpacing: 2,
                           ),
-                          textAlign: pw.TextAlign.center,
                         ),
                       ),
                       pw.SizedBox(height: 30),
+                        
                       // Description
                       pw.Text(
-                        l10n.translate('has_successfully_completed'),
+                          'For successfully completing the Construction Exam',
                         style: pw.TextStyle(
                           fontSize: 18,
-                          color: PdfColors.grey800,
+                            color: blackColor,
                         ),
+                          textAlign: pw.TextAlign.center,
                       ),
-                      pw.SizedBox(height: 15),
+                        pw.SizedBox(height: 10),
                       pw.Text(
-                        l10n.translate('construction_exam').toUpperCase(),
-                        style: pw.TextStyle(
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blue900,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                      pw.SizedBox(height: 20),
-                      pw.Text(
-                        '${l10n.translate('with_completion_rate')} ${widget.progressPercentage.toStringAsFixed(1)}%',
+                          'with an accuracy of ${cert?['accuracy']?.toStringAsFixed(0) ?? widget.progressPercentage.toStringAsFixed(0)}%',
                         style: pw.TextStyle(
                           fontSize: 16,
-                          color: PdfColors.grey700,
+                            color: blackColor,
                         ),
+                          textAlign: pw.TextAlign.center,
                       ),
                       pw.SizedBox(height: 50),
-                      // Stats row
+                        
+                        // Bottom section with QR code, date, and signature
                       pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Column(
-                            children: [
-                              pw.Text(
-                                '0', // TODO: Get from progress data
-                                style: pw.TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.green700,
-                                ),
-                              ),
-                              pw.Text(
-                                l10n.translate('correct_answers'),
-                                style: pw.TextStyle(
-                                  fontSize: 12,
-                                  color: PdfColors.grey700,
-                                ),
-                              ),
-                            ],
-                          ),
+                            // QR Code
+                            if (_qrCodeBytes != null)
                           pw.Container(
-                            width: 1,
-                            height: 40,
-                            color: PdfColors.grey400,
-                          ),
+                                width: 120,
+                                height: 120,
+                                child: pw.Image(
+                                  pw.MemoryImage(_qrCodeBytes!),
+                                  fit: pw.BoxFit.contain,
+                                ),
+                              )
+                            else
+                              pw.SizedBox(width: 120),
+                            
+                            pw.Spacer(),
+                            
+                            // Date and Signature
                           pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.end,
                             children: [
                               pw.Text(
-                                '0', // TODO: Get from progress data
+                                  dateStr,
                                 style: pw.TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.blue900,
+                                    fontSize: 14,
+                                    color: blackColor,
+                                  ),
                                 ),
-                              ),
-                              pw.Text(
-                                l10n.translate('total_questions_attempted'),
-                                style: pw.TextStyle(
-                                  fontSize: 12,
-                                  color: PdfColors.grey700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      pw.Spacer(),
-                      // Signatures
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-                        children: [
-                          pw.Column(
-                            children: [
+                                pw.SizedBox(height: 60),
                               pw.Container(
                                 width: 150,
                                 height: 1,
-                                color: PdfColors.black,
+                                  color: blackColor,
                               ),
                               pw.SizedBox(height: 5),
                               pw.Text(
-                                l10n.translate('signature'),
+                                  'Signature',
                                 style: pw.TextStyle(
                                   fontSize: 12,
-                                  color: PdfColors.grey700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.Column(
-                            children: [
-                              pw.Container(
-                                width: 150,
-                                height: 1,
-                                color: PdfColors.black,
-                              ),
-                              pw.SizedBox(height: 5),
-                              pw.Text(
-                                '${l10n.translate('date')}: $dateStr',
-                                style: pw.TextStyle(
-                                  fontSize: 12,
-                                  color: PdfColors.grey700,
+                                    color: blackColor,
                                 ),
                               ),
                             ],
@@ -317,25 +276,65 @@ class _CertificateScreenState extends State<CertificateScreen> {
                         ],
                       ),
                       pw.SizedBox(height: 20),
+                        
                       // Certificate ID
                       pw.Text(
-                        '${l10n.translate('certificate_id')}: ${widget.user.id.substring(0, 8).toUpperCase()}',
+                          'Certificate ID: $certificateId',
                         style: pw.TextStyle(
                           fontSize: 10,
-                          color: PdfColors.grey600,
+                            color: PdfColors.grey700,
                         ),
                       ),
                     ],
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Decorative gold borders (top-left and bottom-right corners)
+              pw.Positioned(
+                top: 0,
+                left: 0,
+                child: pw.Container(
+                  width: 200,
+                  height: 200,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      top: pw.BorderSide(color: goldColor, width: 4),
+                      left: pw.BorderSide(color: goldColor, width: 4),
+                    ),
+                  ),
+                ),
+              ),
+              pw.Positioned(
+                bottom: 0,
+                right: 0,
+                child: pw.Container(
+                  width: 200,
+                  height: 200,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      bottom: pw.BorderSide(color: goldColor, width: 4),
+                      right: pw.BorderSide(color: goldColor, width: 4),
+                    ),
+                  ),
                   ),
                 ),
               ],
-            ),
           );
         },
       ),
     );
 
     return pdf;
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1];
   }
 
   Future<void> _exportPDF() async {
@@ -347,10 +346,9 @@ class _CertificateScreenState extends State<CertificateScreen> {
       final l10n = AppLocalizations.of(context)!;
       final pdf = await _generateCertificatePDF(l10n);
       
-      // Use printing package to share/save PDF
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'certificate_${widget.user.id.substring(0, 8)}.pdf',
+        filename: 'certificate_${_certificateData?['certificateId'] ?? widget.user.id.substring(0, 8)}.pdf',
       );
 
       if (mounted) {
@@ -419,17 +417,28 @@ class _CertificateScreenState extends State<CertificateScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     
-    // Check if user has scored 50% or above
-    final hasPassed = widget.progressPercentage >= 50.0;
+    // Calculate accuracy from certificate data or use progress percentage
+    final certAccuracy = _certificateData?['accuracy']?.toDouble() ?? widget.progressPercentage;
     
-    if (!hasPassed) {
+    // Check if user has 75% accuracy or certificate exists
+    final hasCertificate = _certificateData != null;
+    final isEligible = certAccuracy >= 75.0;
+    
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.translate('certificate'))),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (!isEligible && !hasCertificate) {
       // User hasn't passed - show message
       return Scaffold(
         appBar: AppBar(
           title: Text(l10n.translate('certificate')),
         ),
         body: Container(
-          color: Theme.of(context).colorScheme.surface,
+          color: const Color(0xFFF5F5DC), // Cream background
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -439,7 +448,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                   Icon(
                     Icons.info_outline,
                     size: 64,
-                    color: Colors.orange,
+                    color: Colors.orange.shade700,
                   ),
                   const SizedBox(height: 24),
                   Text(
@@ -452,7 +461,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'You need to score at least 50% to generate a certificate.',
+                    'You need at least 75% accuracy to generate a certificate.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
@@ -461,7 +470,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Your current score: ${widget.progressPercentage.toStringAsFixed(1)}%',
+                    'Your current progress: ${widget.progressPercentage.toStringAsFixed(1)}%',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
@@ -488,9 +497,17 @@ class _CertificateScreenState extends State<CertificateScreen> {
       );
     }
     
+    final cert = _certificateData;
+    final certificateId = cert?['certificateId'] ?? 'CERT-${widget.user.id.substring(0, 8).toUpperCase()}';
+    final issuedDate = cert?['issuedAt'] != null 
+        ? DateTime.parse(cert!['issuedAt']) 
+        : DateTime.now();
+    
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.translate('certificate')),
+        backgroundColor: const Color(0xFFF5F5DC),
+        foregroundColor: Colors.black87,
         actions: [
           IconButton(
             icon: const Icon(Icons.print),
@@ -511,275 +528,179 @@ class _CertificateScreenState extends State<CertificateScreen> {
         ],
       ),
       body: Container(
-        color: Theme.of(context).colorScheme.surface,
+        color: const Color(0xFFF5F5DC), // Cream background
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              // Visual Certificate Preview
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 1000),
                 padding: const EdgeInsets.all(40),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
+                color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 6,
+                  color: const Color(0xFFFFD700), // Gold
+                  width: 8,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.shadow,
+                    color: Colors.black.withOpacity(0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
                   ],
                 ),
                 child: Column(
+                mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header decoration
-                    Container(
-                      height: 100,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Theme.of(context).colorScheme.primary,
-                            Theme.of(context).colorScheme.primaryContainer,
-                          ],
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(14),
-                          topRight: Radius.circular(14),
-                        ),
-                      ),
+                  // Logo
+                  if (_logoBytes != null)
+                    Image.memory(
+                      _logoBytes!,
+                      width: 150,
+                      height: 150,
+                      fit: BoxFit.contain,
                     ),
-                    const SizedBox(height: 40),
-                    // Certificate Title
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      child: Text(
-                        l10n.translate('certificate_of_completion').toUpperCase(),
+                  const SizedBox(height: 20),
+                  
+                  // Certificate Title
+                  Text(
+                    'CERTIFICATE',
+                    style: TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                      letterSpacing: 3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'OF COMPLETION',
                         style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onPrimary,
+                      fontSize: 28,
+                      color: Colors.black87,
                           letterSpacing: 2,
-                        ),
                       ),
                     ),
                     const SizedBox(height: 40),
-                    // Subtitle
+                  
+                  // This certificate is proudly presented to
                       Text(
                         l10n.translate('this_is_to_certify'),
-                        style: TextStyle(
+                    style: const TextStyle(
                           fontSize: 18,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontStyle: FontStyle.italic,
+                      color: Colors.black87,
                         ),
                       ),
                     const SizedBox(height: 30),
-                    // Name
+                  
+                  // Recipient Name with underline
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 20,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.black87, width: 1),
                         ),
                       ),
                       child: Text(
                         widget.user.name.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 28,
+                        fontSize: 36,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                          letterSpacing: 1.5,
+                        color: const Color(0xFFFFD700), // Gold
+                        letterSpacing: 2,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                     const SizedBox(height: 30),
+                  
                     // Description
-                    Text(
-                      l10n.translate('has_successfully_completed'),
+                  const Text(
+                    'For successfully completing the Construction Exam',
                       style: TextStyle(
                         fontSize: 18,
-                        color: Theme.of(context).colorScheme.onSurface,
+                      color: Colors.black87,
                       ),
+                    textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 15),
+                  const SizedBox(height: 10),
                     Text(
-                      l10n.translate('construction_exam').toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      '${l10n.translate('with_completion_rate')} ${widget.progressPercentage.toStringAsFixed(1)}%',
-                      style: TextStyle(
+                    'with an accuracy of ${certAccuracy.toStringAsFixed(0)}%',
+                    style: const TextStyle(
                         fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurface,
+                      color: Colors.black87,
                       ),
+                    textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 50),
-                    // Stats
+                  
+                  // Bottom section with QR code, date, and signature
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          children: [
-                            Text(
-                              '0', // TODO: Get from progress data
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.tertiary,
-                              ),
-                            ),
-                            Text(
-                              l10n.translate('correct'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ],
-                        ),
+                      // QR Code
+                      if (_qrCodeBytes != null)
                         Container(
-                          width: 1,
-                          height: 50,
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
+                          width: 120,
+                          height: 120,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.black26),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Image.memory(
+                            _qrCodeBytes!,
+                            fit: BoxFit.contain,
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 120),
+                      
+                      const Spacer(),
+                      
+                      // Date and Signature
                         Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '0', // TODO: Get from progress data
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+                            '${issuedDate.day} ${_getMonthName(issuedDate.month)} ${issuedDate.year}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
                             ),
-                            Text(
-                              l10n.translate('attempted'),
+                          ),
+                          const SizedBox(height: 60),
+                        Container(
+                            width: 150,
+                            height: 1,
+                            color: Colors.black87,
+                          ),
+                          const SizedBox(height: 5),
+                          const Text(
+                            'Signature',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurface,
+                              color: Colors.black87,
                               ),
                             ),
                           ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 60),
-                    // Footer decoration
-                    Container(
-                      height: 100,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xFF3B82F6), Color(0xFF1E3A8A)],
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(14),
-                          bottomRight: Radius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Action buttons
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isGenerating ? null : _printPDF,
-                      icon: const Icon(Icons.print),
-                      label: Text(l10n.translate('print')),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.95),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isGenerating ? null : _exportPDF,
-                      icon: _isGenerating
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onTertiary),
-                              ),
-                            )
-                          : const Icon(Icons.download),
-                      label: Text(_isGenerating ? l10n.translate('exporting') : l10n.translate('export_pdf')),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.tertiary,
-                        foregroundColor: Theme.of(context).colorScheme.onTertiary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              // Info card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'You can print or share this certificate as a PDF file.',
+                  
+                  // Certificate ID
+                  Text(
+                    'Certificate ID: $certificateId',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ],
+                      fontSize: 10,
+                      color: Colors.grey.shade700,
                 ),
               ),
             ],
+              ),
+            ),
           ),
         ),
       ),

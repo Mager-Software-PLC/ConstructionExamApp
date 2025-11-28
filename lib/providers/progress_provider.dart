@@ -5,8 +5,10 @@ import '../services/notification_service.dart';
 class ProgressProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
   bool _isLoading = false;
+  Map<String, dynamic>? _currentProgress; // Store current progress stats
 
   bool get isLoading => _isLoading;
+  Map<String, dynamic>? get currentProgress => _currentProgress;
 
   Future<bool> submitAnswer({
     required String questionId,
@@ -24,7 +26,6 @@ class ProgressProvider with ChangeNotifier {
       );
 
       _isLoading = false;
-      notifyListeners();
 
       if (response['success'] == true) {
         // Show notification for correct answer
@@ -35,8 +36,20 @@ class ProgressProvider with ChangeNotifier {
             body: 'Well done!',
           );
         }
+        
+        // Update current progress with the updated stats from response
+        if (response['data']?['userStats'] != null) {
+          _currentProgress = response['data']?['userStats'] as Map<String, dynamic>;
+          debugPrint('[ProgressProvider] Updated progress: accuracy=${_currentProgress?['accuracy']}, progress=${_currentProgress?['progress']}');
+        }
+        
+        // Reload full progress to ensure it's up to date
+        await getUserProgress();
+        
+        notifyListeners();
         return isCorrect;
       } else {
+        notifyListeners();
         return false;
       }
     } catch (e) {
@@ -54,11 +67,22 @@ class ProgressProvider with ChangeNotifier {
       final response = await _apiService.getUserProgress();
 
       _isLoading = false;
-      notifyListeners();
 
       if (response['success'] == true) {
-        return response['data'] as Map<String, dynamic>?;
+        final progressData = response['data'] as Map<String, dynamic>?;
+        // Update current progress
+        if (progressData != null) {
+          _currentProgress = {
+            'progress': progressData['overallProgress'] ?? 0,
+            'accuracy': progressData['accuracy'] ?? progressData['overallAccuracy'] ?? 0,
+            'totalQuestionsAnswered': progressData['totalQuestionsAnswered'] ?? 0,
+            'totalCorrectAnswers': progressData['totalCorrectAnswers'] ?? 0,
+          };
+        }
+        notifyListeners();
+        return progressData;
       }
+      notifyListeners();
       return null;
     } catch (e) {
       _isLoading = false;

@@ -35,11 +35,20 @@ android {
 
     buildTypes {
         release {
-            // Temporarily disable minification to avoid build issues
-            // Can be enabled later after testing
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Enable minification and resource shrinking to reduce APK size
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
+            
+            // Optimize APK
+            isDebuggable = false
+            isJniDebuggable = false
+            isRenderscriptDebuggable = false
+            renderscriptOptimLevel = 3
         }
         debug {
             isMinifyEnabled = false
@@ -47,17 +56,18 @@ android {
         }
     }
     
-    // Split APKs by ABI to reduce size (disabled for now to ensure build works)
-    // splits {
-    //     abi {
-    //         isEnable = true
-    //         reset()
-    //         include("armeabi-v7a", "arm64-v8a", "x86_64")
-    //         isUniversalApk = false
-    //     }
-    // }
+    // Split APKs by ABI to reduce size - each APK will only include native libraries for one architecture
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            // Only include commonly used architectures
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
+    }
     
-    // Optimize build
+    // Optimize build and reduce size
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -66,7 +76,20 @@ android {
             excludes += "/META-INF/LICENSE.txt"
             excludes += "/META-INF/NOTICE"
             excludes += "/META-INF/NOTICE.txt"
+            // Exclude unnecessary files
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/*.kotlin_module"
         }
+        
+        // Optimize native libraries
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+    
+    // Enable build optimizations
+    buildFeatures {
+        buildConfig = true
     }
 }
 

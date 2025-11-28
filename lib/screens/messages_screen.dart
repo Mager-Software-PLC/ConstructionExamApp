@@ -118,7 +118,31 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     final messageProvider = Provider.of<MessageProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
-    if (!authProvider.isAuthenticated || authProvider.user == null) {
+    // Check token directly instead of relying on authProvider.isAuthenticated
+    // This handles cases where token exists but user data hasn't loaded yet
+    final backendAuthService = BackendAuthService();
+    bool hasToken = false;
+    String? token;
+    
+    debugPrint('[MessagesScreen] Checking token before creating conversation...');
+    
+    // Try multiple times to get token
+    for (int i = 0; i < 3; i++) {
+      hasToken = await backendAuthService.isLoggedIn();
+      if (hasToken) {
+        token = await backendAuthService.getToken();
+        if (token != null && token.isNotEmpty) {
+          debugPrint('[MessagesScreen] ✅ Token found, length: ${token.length}');
+          break;
+        }
+      }
+      if (i < 2) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    
+    if (!hasToken || token == null || token.isEmpty) {
+      debugPrint('[MessagesScreen] ❌ No token found, cannot create conversation');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -141,20 +165,6 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     }
 
     try {
-      // Verify token exists before creating conversation
-      final backendAuthService = BackendAuthService();
-      final hasToken = await backendAuthService.isLoggedIn();
-      if (!hasToken) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please login to start a conversation'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
       
       final conversation = await messageProvider.createConversation();
       

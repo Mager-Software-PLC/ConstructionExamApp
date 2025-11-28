@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/progress_provider.dart';
-import '../providers/auth_provider.dart';
 import '../models/api_models.dart' show Question;
 import '../l10n/app_localizations.dart';
 import '../services/screenshot_protection_service.dart';
+import '../services/api_service.dart';
 
 class QuestionsScreen extends StatefulWidget {
   final String? categoryId;
@@ -25,6 +25,8 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
   bool _showFeedback = false;
   bool _isCorrect = false;
   bool _isSubmitting = false;
+  Set<String> _answeredQuestionIds = {};
+  Map<String, Map<String, dynamic>> _questionAnswers = {}; // questionId -> { selectedAnswer, isCorrect }
 
   Future<void> _loadProgress() async {
     final progressProvider = Provider.of<ProgressProvider>(context, listen: false);
@@ -46,8 +48,73 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
           categoryId: widget.categoryId,
           context: context,
         );
+        
+        // Load progress and resume from last unanswered question
+        if (widget.categoryId != null && questionProvider.questions.isNotEmpty) {
+          await _loadCategoryProgressAndResume();
+        }
       }
     });
+  }
+
+  Future<void> _loadCategoryProgressAndResume() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getProgressByCategory(widget.categoryId!);
+      
+      if (mounted && response['success'] == true && response['data'] != null) {
+        final data = response['data'] as Map<String, dynamic>;
+        final answeredQuestionIds = (data['answeredQuestionIds'] as List<dynamic>?)
+            ?.map((id) => id.toString())
+            .toSet() ?? <String>{};
+        final questionAnswers = (data['questionAnswers'] as Map<String, dynamic>?) ?? {};
+        
+        setState(() {
+          _answeredQuestionIds = answeredQuestionIds;
+          _questionAnswers = Map<String, Map<String, dynamic>>.from(
+            questionAnswers.map((key, value) => MapEntry(
+              key.toString(),
+              Map<String, dynamic>.from(value as Map),
+            )),
+          );
+        });
+        
+        // Find the first unanswered question
+        final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
+        if (questionProvider.questions.isNotEmpty) {
+          int firstUnansweredIndex = -1;
+          for (int i = 0; i < questionProvider.questions.length; i++) {
+            final question = questionProvider.questions[i];
+            final questionId = question.id;
+            if (!answeredQuestionIds.contains(questionId)) {
+              firstUnansweredIndex = i;
+              break;
+            }
+          }
+          
+          // If all questions are answered, start from the last one
+          // Otherwise, start from the first unanswered question
+          if (firstUnansweredIndex >= 0) {
+            setState(() {
+              _currentQuestionIndex = firstUnansweredIndex;
+            });
+            // Load state for the first unanswered question
+            _loadQuestionState(questionProvider.questions[firstUnansweredIndex]);
+          } else if (questionProvider.questions.isNotEmpty) {
+            // All questions answered, start from the last one
+            final lastIndex = questionProvider.questions.length - 1;
+            setState(() {
+              _currentQuestionIndex = lastIndex;
+            });
+            // Load state for the last question
+            _loadQuestionState(questionProvider.questions[lastIndex]);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading category progress: $e');
+      // Continue with default index 0 if there's an error
+    }
   }
 
   @override
@@ -55,6 +122,31 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
     // Disable screenshot protection when leaving questions screen
     ScreenshotProtectionService().disableProtection();
     super.dispose();
+  }
+
+  void _loadQuestionState(Question question) {
+    // Check if this question was already answered
+    final questionId = question.id;
+    if (_answeredQuestionIds.contains(questionId) && _questionAnswers.containsKey(questionId)) {
+      final answerData = _questionAnswers[questionId]!;
+      final selectedAnswer = answerData['selectedAnswer'] as int?;
+      final isCorrect = answerData['isCorrect'] as bool? ?? false;
+      
+      if (selectedAnswer != null) {
+        setState(() {
+          _selectedAnswerIndex = selectedAnswer;
+          _isCorrect = isCorrect;
+          _showFeedback = true; // Show feedback for already answered questions
+        });
+      }
+    } else {
+      // Reset state for unanswered questions
+      setState(() {
+        _selectedAnswerIndex = null;
+        _showFeedback = false;
+        _isCorrect = false;
+      });
+    }
   }
 
   Future<void> _handleAnswerSelection(
@@ -83,8 +175,20 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
       categoryId: question.categoryId,
     );
 
-    // Reload progress
+    // Mark question as answered
+    setState(() {
+      _answeredQuestionIds.add(question.id);
+      _questionAnswers[question.id] = {
+        'selectedAnswer': selectedIndex,
+        'isCorrect': _isCorrect,
+      };
+    });
+
+    // Reload progress to get updated scores
     await _loadProgress();
+    
+    // Also reload category progress to update the categories screen
+    // This will be picked up when user returns to categories screen
   }
 
   Future<void> _nextQuestion() async {
@@ -92,12 +196,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
     
     final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
     if (_currentQuestionIndex < questionProvider.questions.length - 1) {
+      final nextIndex = _currentQuestionIndex + 1;
+      final nextQuestion = questionProvider.questions[nextIndex];
+      
       setState(() {
-        _currentQuestionIndex++;
-        _selectedAnswerIndex = null;
-        _showFeedback = false;
-        _isCorrect = false;
+        _currentQuestionIndex = nextIndex;
       });
+      
+      // Load the state for the next question (will show previous answer if answered)
+      _loadQuestionState(nextQuestion);
     } else {
       // All questions completed
       await _loadProgress();

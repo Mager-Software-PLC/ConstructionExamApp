@@ -75,6 +75,9 @@ dependencies:
   # Socket.IO Client
   socket_io_client: ^2.0.3+1
   
+  # Google Sign-In
+  google_sign_in: ^6.2.1
+  
   # Screenshot Protection - Using native platform channels
 
 dev_dependencies:
@@ -87,6 +90,9 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  
+  # Flutter Launcher Icons - Generate app icons from a single source
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -102,6 +108,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - lib/data/construction_questions.json
+    - assets/logo.png
+    - assets/favicon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -128,3 +136,13 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Flutter Launcher Icons Configuration
+# This will generate app icons for Android and iOS from the favicon.png
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/favicon.png"
+  min_sdk_android: 21 # Android min sdk min:16, default 21
+  adaptive_icon_background: "#FFFFFF" # Optional: background color for Android adaptive icon
+  adaptive_icon_foreground: "assets/favicon.png" # Optional: foreground image for Android adaptive icon

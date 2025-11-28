@@ -9,6 +9,7 @@ import 'providers/progress_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/message_provider.dart';
 import 'providers/category_provider.dart';
+import 'providers/notification_provider.dart';
 import 'screens/language_selection_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
@@ -88,6 +89,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => MessageProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: Consumer2<LanguageProvider, ThemeProvider>(
         builder: (context, languageProvider, themeProvider, _) {

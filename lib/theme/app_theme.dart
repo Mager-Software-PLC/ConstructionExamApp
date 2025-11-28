@@ -2,30 +2,30 @@ import 'package:flutter/material.dart';
 
 // App color constants
 class AppColors {
-  // Light theme colors - Dark Green theme
-  static const Color lightPrimary = Color(0xFF1B5E20); // Material Green 900 - Darker green
-  static const Color lightPrimaryVariant = Color(0xFF2E7D32); // Material Green 800 - Dark green
+  // Light theme colors - Yellow/Amber theme (matching shadcn yellow)
+  static const Color lightPrimary = Color(0xFFEAB308); // Amber 500 - Golden yellow (matches oklch(0.70 0.18 90))
+  static const Color lightPrimaryVariant = Color(0xFFFCD34D); // Amber 300 - Lighter yellow
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightBackground = Color(0xFFF1F8F4); // Light greenish tint
+  static const Color lightBackground = Color(0xFFFEFDF6); // Light yellowish tint
   static const Color lightOnSurface = Color(0xFF1F1F1F);
   
-  // Dark theme colors - Dark Green theme
-  static const Color darkPrimary = Color(0xFF388E3C); // Material Green 700 - Darker green
-  static const Color darkPrimaryVariant = Color(0xFF43A047); // Material Green 600 - Medium-dark green
-  static const Color darkSurface = Color(0xFF1B2E1D); // Dark greenish surface
-  static const Color darkBackground = Color(0xFF0F1A10); // Very dark greenish background
-  static const Color darkOnSurface = Color(0xFFE8F5E9); // Light greenish text
+  // Dark theme colors - Yellow/Amber theme (matching shadcn yellow)
+  static const Color darkPrimary = Color(0xFFFBBF24); // Amber 400 - Bright yellow (matches oklch(0.75 0.20 90))
+  static const Color darkPrimaryVariant = Color(0xFFFCD34D); // Amber 300 - Lighter yellow
+  static const Color darkSurface = Color(0xFF1F1E16); // Dark yellowish surface
+  static const Color darkBackground = Color(0xFF14130F); // Very dark yellowish background
+  static const Color darkOnSurface = Color(0xFFFEF3C7); // Light yellowish text
   
   // Semantic colors (same for both themes)
-  static const Color success = Color(0xFF388E3C); // Darker green - will use with opacity
-  static const Color warning = Color(0xFFFF9800); // Orange
+  static const Color success = Color(0xFF10B981); // Green for success
+  static const Color warning = Color(0xFFF59E0B); // Amber/Orange
   static const Color error = Color(0xFFEF4444); // Red
-  static const Color info = Color(0xFF2196F3); // Blue
+  static const Color info = Color(0xFF3B82F6); // Blue
   
   // Difficulty colors
-  static const Color difficultyEasy = Color(0xFF388E3C); // Darker green - will use with opacity
-  static const Color difficultyMedium = Color(0xFFFF9800); // Orange
-  static const Color difficultyHard = Color(0xFFEF4444); // Red
+  static const Color difficultyEasy = Color(0xFF10B981); // Green for easy
+  static const Color difficultyMedium = Color(0xFFF59E0B); // Amber/Orange for medium
+  static const Color difficultyHard = Color(0xFFEF4444); // Red for hard
 }
 
 // Typography scale
@@ -173,9 +173,9 @@ class AppTheme {
       error: AppColors.error,
       surface: AppColors.lightSurface,
       background: AppColors.lightBackground,
-      onPrimary: Colors.white,
-      onSecondary: Colors.white,
-      onTertiary: Colors.white,
+      onPrimary: const Color(0xFF1F1F1F), // Dark text on yellow (matches oklch(0.20 0.02 90))
+      onSecondary: const Color(0xFF1F1F1F), // Dark text on yellow
+      onTertiary: const Color(0xFF1F1F1F), // Dark text on yellow
       onError: Colors.white,
       onSurface: AppColors.lightOnSurface,
       onBackground: AppColors.lightOnSurface,
@@ -229,7 +229,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.lightPrimary,
-          foregroundColor: Colors.white,
+          foregroundColor: colorScheme.onPrimary,
           elevation: AppElevation.md,
           shadowColor: AppColors.lightPrimary.withOpacity(0.3),
           padding: const EdgeInsets.symmetric(
@@ -241,7 +241,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           textStyle: AppTypography.labelLarge.copyWith(
-            color: Colors.white,
+            color: colorScheme.onPrimary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -368,7 +368,7 @@ class AppTheme {
       // Floating Action Button Theme
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.lightPrimary,
-        foregroundColor: Colors.white,
+        foregroundColor: colorScheme.onPrimary,
         elevation: AppElevation.lg,
         highlightElevation: AppElevation.xl,
         shape: RoundedRectangleBorder(
@@ -413,7 +413,7 @@ class AppTheme {
         ),
         labelStyle: AppTypography.labelMedium,
         secondaryLabelStyle: AppTypography.labelMedium.copyWith(
-          color: Colors.white,
+          color: colorScheme.onPrimary,
         ),
         brightness: Brightness.light,
         elevation: 0,
@@ -437,8 +437,8 @@ class AppTheme {
       ),
       
       // Primary Icon Theme
-      primaryIconTheme: const IconThemeData(
-        color: Colors.white,
+      primaryIconTheme: IconThemeData(
+        color: colorScheme.onPrimary,
         size: 24,
       ),
       
@@ -594,7 +594,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.darkPrimary,
-          foregroundColor: AppColors.darkOnSurface,
+          foregroundColor: colorScheme.onPrimary,
           elevation: AppElevation.md,
           shadowColor: AppColors.darkPrimary.withOpacity(0.3),
           padding: const EdgeInsets.symmetric(
@@ -606,7 +606,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           textStyle: AppTypography.labelLarge.copyWith(
-            color: AppColors.darkOnSurface,
+            color: colorScheme.onPrimary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -733,7 +733,7 @@ class AppTheme {
       // Floating Action Button Theme
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.darkPrimary,
-        foregroundColor: AppColors.darkOnSurface,
+        foregroundColor: colorScheme.onPrimary,
         elevation: AppElevation.lg,
         highlightElevation: AppElevation.xl,
         shape: RoundedRectangleBorder(
@@ -778,7 +778,7 @@ class AppTheme {
         ),
         labelStyle: AppTypography.labelMedium,
         secondaryLabelStyle: AppTypography.labelMedium.copyWith(
-          color: Colors.white,
+          color: colorScheme.onPrimary,
         ),
         brightness: Brightness.dark,
         elevation: 0,
@@ -802,8 +802,8 @@ class AppTheme {
       ),
       
       // Primary Icon Theme
-      primaryIconTheme: const IconThemeData(
-        color: Colors.white,
+      primaryIconTheme: IconThemeData(
+        color: colorScheme.onPrimary,
         size: 24,
       ),
       

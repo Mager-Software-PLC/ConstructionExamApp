@@ -191,43 +191,168 @@ class AuthProvider with ChangeNotifier {
     required String password,
     required String phone,
   }) async {
+    // Legacy registration - redirects to phone verification flow
+    _errorMessage = 'Please use the phone verification flow';
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  // Send registration OTP
+  Future<bool> sendRegistrationOTP({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    String? preferredLanguage,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _authService.sendRegistrationOTP(
+        name: name,
+        email: email,
+        password: password,
+        phone: phone,
+        preferredLanguage: preferredLanguage,
+      );
+
+      if (result['success'] == true) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['message'] ?? 'Failed to send OTP';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Verify registration OTP
+  Future<bool> verifyRegistrationOTP({
+    required String phone,
+    required String code,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _authService.verifyRegistrationOTP(
+        phone: phone,
+        code: code,
+      );
+
+      if (result['success'] == true && result['user'] != null) {
+        _user = User.fromJson(result['user']);
+        debugPrint('[Auth] Registration OTP verified. User parsed: ${_user!.id}, email: ${_user!.email}');
+
+        await Future.delayed(const Duration(milliseconds: 500)); // Give time for token to save
+
+        final hasToken = await _authService.isLoggedIn();
+        if (!hasToken) {
+          debugPrint('[Auth] ❌ Error: Token not found after registration OTP verification.');
+          _errorMessage = 'Failed to save authentication token. Please try again.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+
+        await _sessionService.saveSession(
+          _user!.id,
+          rememberMe: true,
+          email: _user!.email,
+        );
+        await _sessionService.refreshSession();
+        _isSessionValid = true;
+        _isLoading = false;
+        notifyListeners();
+        debugPrint('[Auth] ✅ Registration OTP verification complete. User will remain logged in.');
+        return true;
+      } else {
+        _errorMessage = result['message'] ?? 'OTP verification failed';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> googleSignIn(String idToken) async {
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      final result = await _authService.register(
-        name: name,
-        email: email,
-        password: password,
-        phone: phone,
-      );
+      final result = await _authService.googleSignIn(idToken);
 
-      if (result['success'] == true) {
-        // Registration might not return token immediately (email verification required)
-        // But we should still have user data
-        if (result['user'] != null) {
-          _user = User.fromJson(result['user']);
-          // Only save session if we have a token (auto-login after registration)
-          if (result['token'] != null) {
-            await _sessionService.saveSession(
-              _user!.id,
-              rememberMe: true,
-              email: _user!.email,
-            );
-            _isSessionValid = true;
-          }
-        } else {
-          _errorMessage = 'Registration successful but user data not received';
+      if (result['success'] == true && result['user'] != null) {
+        // Parse user data
+        _user = User.fromJson(result['user']);
+        debugPrint('[Auth] Google sign-in successful. User parsed: ${_user!.id}, email: ${_user!.email}');
+        
+        // Wait a bit to ensure token is saved by API service
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        // Verify token was saved
+        final hasToken = await _authService.isLoggedIn();
+        debugPrint('[Auth] Token check after Google sign-in: $hasToken');
+        
+        if (!hasToken) {
+          debugPrint('[Auth] ❌ Error: Token not found after Google sign-in');
+          _errorMessage = 'Failed to save authentication token. Please try again.';
           _isLoading = false;
           notifyListeners();
           return false;
         }
+        
+        // Double-check token is actually stored
+        final token = await _authService.getToken();
+        if (token == null || token.isEmpty) {
+          debugPrint('[Auth] ❌ Error: Token verification failed after Google sign-in');
+          _errorMessage = 'Failed to save authentication token. Please try again.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+        
+        debugPrint('[Auth] ✅ Google sign-in successful, token verified. User ID: ${_user!.id}, Token length: ${token.length}');
+        
+        // Save session for persistence
+        try {
+          await _sessionService.saveSession(
+            _user!.id,
+            rememberMe: true,
+            email: _user!.email,
+          );
+          await _sessionService.refreshSession();
+          debugPrint('[Auth] ✅ Session saved successfully after Google sign-in');
+        } catch (e) {
+          debugPrint('[Auth] ⚠️ Error saving session after Google sign-in: $e');
+        }
+        
+        _isSessionValid = true;
         _isLoading = false;
         notifyListeners();
+        
+        debugPrint('[Auth] ✅ Google sign-in complete. User will remain logged in after app restart.');
         return true;
       } else {
-        _errorMessage = result['message'] ?? 'Registration failed';
+        _errorMessage = result['message'] ?? 'Google sign-in failed';
         _isLoading = false;
         notifyListeners();
         return false;

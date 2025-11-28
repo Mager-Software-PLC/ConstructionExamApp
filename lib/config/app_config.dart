@@ -12,6 +12,10 @@ class AppConfig {
   static const Duration connectionTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
   
+  // Google OAuth Client ID
+  // Using web client ID for consistency with backend
+  static const String googleClientId = '373625809559-0028ioi1et07vobj231645rd3g7ddeor.apps.googleusercontent.com';
+  
   // API endpoints
   static const String authEndpoint = '/auth';
   static const String usersEndpoint = '/users';

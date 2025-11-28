@@ -30,7 +30,7 @@ class BackendAuthService {
     }
   }
   
-  // Register new user
+  // Register new user (legacy - kept for backward compatibility)
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
@@ -62,6 +62,86 @@ class BackendAuthService {
       return {
         'success': false,
         'message': e.toString(),
+      };
+    }
+  }
+
+  // Send registration OTP
+  Future<Map<String, dynamic>> sendRegistrationOTP({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    String? preferredLanguage,
+  }) async {
+    try {
+      final response = await _apiService.sendRegistrationOTP(
+        name: name,
+        email: email,
+        password: password,
+        phone: phone,
+        preferredLanguage: preferredLanguage,
+      );
+      
+      if (response['success'] == true) {
+        return {
+          'success': true,
+          'message': response['message'] ?? 'OTP sent successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Failed to send OTP',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Failed to send OTP. Please try again.';
+      if (e is ApiException) {
+        errorMessage = e.message;
+      } else {
+        errorMessage = e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
+  // Verify registration OTP
+  Future<Map<String, dynamic>> verifyRegistrationOTP({
+    required String phone,
+    required String code,
+  }) async {
+    try {
+      final response = await _apiService.verifyRegistrationOTP(
+        phone: phone,
+        code: code,
+      );
+      
+      if (response['success'] == true && response['data'] != null) {
+        return {
+          'success': true,
+          'user': response['data']['user'],
+          'token': response['data']['token'],
+          'refreshToken': response['data']['refreshToken'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': response['message'] ?? 'OTP verification failed',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'OTP verification failed. Please try again.';
+      if (e is ApiException) {
+        errorMessage = e.message;
+      } else {
+        errorMessage = e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
       };
     }
   }
@@ -193,6 +273,44 @@ class BackendAuthService {
     } catch (e) {
       debugPrint('[BackendAuth] ❌ Error getting token: $e');
       return null;
+    }
+  }
+  
+  // Google Sign-In
+  Future<Map<String, dynamic>> googleSignIn(String idToken) async {
+    try {
+      final response = await _apiService.googleSignIn(idToken: idToken);
+      
+      if (response['success'] == true && response['data'] != null) {
+        return {
+          'success': true,
+          'user': response['data']['user'],
+          'token': response['data']['token'],
+          'refreshToken': response['data']['refreshToken'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Google sign-in failed',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Google sign-in failed. Please try again.';
+      if (e is ApiException) {
+        errorMessage = e.message;
+      } else {
+        errorMessage = e.toString();
+        if (errorMessage.contains('SocketException') || errorMessage.contains('Failed host lookup')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection.';
+        } else if (errorMessage.contains('TimeoutException')) {
+          errorMessage = 'Connection timeout. Please try again.';
+        }
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
     }
   }
 }

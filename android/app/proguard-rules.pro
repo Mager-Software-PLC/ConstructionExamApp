@@ -47,3 +47,52 @@
     java.lang.Object readResolve();
 }
 
+# Optimize and obfuscate
+-optimizationpasses 5
+-dontusemixedcaseclassnames
+-dontskipnonpubliclibraryclasses
+-verbose
+
+# Remove unused code more aggressively
+-assumenosideeffects class kotlin.jvm.internal.Intrinsics {
+    static void checkParameterIsNotNull(java.lang.Object, java.lang.String);
+}
+
+# Remove logging in release builds (saves space)
+-assumenosideeffects class kotlin.io.ConsoleKt {
+    static void println(...);
+    static void print(...);
+}
+
+# Keep Google Sign-In classes
+-keep class com.google.android.gms.auth.** { *; }
+-keep class com.google.android.gms.common.** { *; }
+
+# Keep Socket.IO classes
+-keep class io.socket.** { *; }
+-dontwarn io.socket.**
+
+# Keep HTTP classes
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+# Keep secure storage classes
+-keep class com.it_nomads.fluttersecurestorage.** { *; }
+-dontwarn com.it_nomads.fluttersecurestorage.**
+
+# Keep image picker classes
+-keep class io.flutter.plugins.imagepicker.** { *; }
+
+# Keep file picker classes
+-keep class com.mr.flutter.plugin.filepicker.** { *; }
+-dontwarn com.mr.flutter.plugin.filepicker.**
+
+# Keep PDF classes
+-keep class printing.** { *; }
+-dontwarn printing.**
+
+# Keep URL launcher classes
+-keep class io.flutter.plugins.urllauncher.** { *; }
+

@@ -26,7 +26,12 @@ class CategoryProvider with ChangeNotifier {
         if (data is List) {
           _categories = data
               .map((json) => Category.fromJson(json))
-              .where((category) => category.isActive) // Only show active categories
+              .where((category) {
+                // Only show active categories and exclude taxi driver category
+                if (!category.isActive) return false;
+                final name = category.name.toLowerCase();
+                return !name.contains('taxi') && !name.contains('driver');
+              })
               .toList();
           // Sort by order, then by name
           _categories.sort((a, b) {

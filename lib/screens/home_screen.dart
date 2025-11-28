@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/progress_provider.dart';
+import '../services/api_service.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'categories_screen.dart';
 import 'certificate_screen.dart';
 import 'materials_screen.dart';
+import 'questions_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,22 +24,64 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   
   Map<String, dynamic>? _progressData;
   bool _isLoading = true;
+  Map<String, dynamic>? _firstCategoryData;
+  bool _hasStarted = false;
 
   @override
   void initState() {
     super.initState();
-    _loadProgress();
+    _loadData();
   }
 
-  Future<void> _loadProgress() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload status when returning to screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
+  }
+
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final progressProvider = Provider.of<ProgressProvider>(context, listen: false);
-    final progress = await progressProvider.getProgressStats();
+    
+    // Create ApiService instance (it gets token from secure storage)
+    final apiService = ApiService();
+    
+    // Load progress and first category status in parallel
+    final results = await Future.wait([
+      progressProvider.getProgressStats(),
+      _loadFirstCategoryStatus(apiService),
+    ]);
+    
     if (mounted) {
       setState(() {
-        _progressData = progress;
+        _progressData = results[0] as Map<String, dynamic>?;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadFirstCategoryStatus(ApiService apiService) async {
+    try {
+      final response = await apiService.getFirstCategoryAndStatus();
+      debugPrint('[Home] First category status response: ${response.toString()}');
+      if (response['success'] == true && response['data'] != null) {
+        final data = response['data'] as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _firstCategoryData = data['category'] as Map<String, dynamic>?;
+            _hasStarted = data['hasStarted'] ?? false;
+          });
+          debugPrint('[Home] Updated state: hasStarted=$_hasStarted, categoryId=${_firstCategoryData?['_id'] ?? _firstCategoryData?['id']}');
+        }
+      } else {
+        debugPrint('[Home] Failed to get first category status: ${response['message']}');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error loading first category status: $e');
+      debugPrint('Stack trace: $stackTrace');
     }
   }
 
@@ -70,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     return Scaffold(
       backgroundColor: theme.colorScheme.background,
       body: RefreshIndicator(
-        onRefresh: _loadProgress,
+        onRefresh: _loadData,
         color: theme.colorScheme.primary,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -419,6 +463,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildModernPracticeButton(BuildContext context, AppLocalizations l10n, ThemeData theme) {
+    final buttonText = _hasStarted 
+        ? l10n.translate('continue')
+        : l10n.translate('start');
+    final icon = _hasStarted ? Icons.play_circle_outline : Icons.play_arrow_rounded;
+    
     return Container(
       width: double.infinity,
       height: 72,
@@ -443,12 +492,94 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const CategoriesScreen(),
-              ),
-            );
+          onTap: () async {
+            // Navigate directly to first category questions
+            if (_firstCategoryData != null) {
+              final categoryId = _firstCategoryData!['_id'] ?? _firstCategoryData!['id'];
+              final categoryName = _firstCategoryData!['name']?.toString() ?? '';
+              
+              final questionProvider = Provider.of<QuestionProvider>(context, listen: false);
+              
+              // Show loading dialog
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.translate('loading_questions'),
+                          style: AppTypography.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+
+              try {
+                await questionProvider.loadQuestions(
+                  categoryId: categoryId.toString(),
+                  context: context,
+                );
+
+                if (mounted) {
+                  Navigator.of(context).pop(); // Close loading dialog
+
+                  if (questionProvider.questions.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(l10n.translate('no_questions_available')),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => QuestionsScreen(
+                          categoryId: categoryId.toString(),
+                          categoryName: categoryName,
+                        ),
+                      ),
+                    ).then((_) {
+                      // Reload progress when returning from questions screen
+                      _loadData();
+                    });
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.of(context).pop(); // Close loading dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error loading questions: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            } else {
+              // Fallback to categories screen if first category not loaded
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const CategoriesScreen(),
+                ),
+              ).then((_) {
+                // Reload status when returning from categories screen
+                _loadData();
+              });
+            }
           },
           borderRadius: BorderRadius.circular(24),
           child: Padding(
@@ -462,11 +593,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                  child: Icon(icon, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 16),
                 Text(
-                  l10n.translate('start_continue_exam'),
+                  buttonText,
                   style: AppTypography.titleLarge.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,

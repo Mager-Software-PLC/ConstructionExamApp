@@ -35,6 +35,7 @@ class SocketService {
   Function(Map<String, dynamic>)? onMessage;
   Function(Map<String, dynamic>)? onMessageNotification;
   Function(Map<String, dynamic>)? onTyping;
+  Function(Map<String, dynamic>)? onNotification;
 
   Future<void> connect({bool forceReconnect = false}) async {
     // Check if we can reconnect (not in auth failure cooldown)
@@ -438,6 +439,14 @@ class SocketService {
         if (!_joinedRooms.contains(roomId)) {
           _joinedRooms.add(roomId);
         }
+      }
+    });
+
+    // Listen for notifications
+    _socket!.on('notification', (data) {
+      debugPrint('🔔 Received notification: $data');
+      if (data is Map<String, dynamic> && onNotification != null) {
+        onNotification!(data);
       }
     });
   }
