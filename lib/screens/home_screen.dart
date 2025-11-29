@@ -49,9 +49,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     // Create ApiService instance (it gets token from secure storage)
     final apiService = ApiService();
     
-    // Load progress and first category status in parallel
+    // Load progress using same endpoint as web (getMyProgress instead of getProgressStats)
+    // and first category status in parallel
     final results = await Future.wait([
-      progressProvider.getProgressStats(),
+      progressProvider.getUserProgress(), // Use same endpoint as web
       _loadFirstCategoryStatus(apiService),
     ]);
     
@@ -105,11 +106,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       );
     }
 
-    final progressPercentage = _progressData?['overallProgress']?['percentage']?.toDouble() ?? user.progress;
-    final correctAnswers = _progressData?['overallProgress']?['correctAnswers'] ?? 0;
-    final wrongAnswers = _progressData?['overallProgress']?['wrongAnswers'] ?? 0;
-    final totalAttempted = _progressData?['overallProgress']?['totalAttempted'] ?? 0;
-    final canGenerateCertificate = progressPercentage >= 50.0;
+    // Use same data structure as web (matches /progress/my-progress endpoint)
+    final overallProgress = _progressData?['overallProgress'] ?? _progressData?['progress'] ?? user.progress;
+    final progressPercentage = (overallProgress is num) ? overallProgress.toDouble() : user.progress;
+    final totalQuestions = _progressData?['totalQuestionsAnswered'] ?? 0;
+    final correctAnswers = _progressData?['totalCorrectAnswers'] ?? 0;
+    final accuracy = _progressData?['accuracy'] ?? _progressData?['overallAccuracy'] ?? 0.0;
+    final wrongAnswers = totalQuestions - correctAnswers;
+    final canGenerateCertificate = accuracy >= 85.0; // Match web requirement (85%)
 
     return Scaffold(
       backgroundColor: theme.colorScheme.background,
@@ -205,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     _buildModernProgressCard(
                       context,
                       progressPercentage,
-                      totalAttempted,
+                      totalQuestions,
                       questionProvider.totalQuestions,
                       l10n,
                       theme,
@@ -216,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                       context,
                       correctAnswers,
                       wrongAnswers,
-                      totalAttempted,
+                      totalQuestions,
                       l10n,
                       theme,
                     ),
@@ -532,6 +536,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 await questionProvider.loadQuestions(
                   categoryId: categoryId.toString(),
                   context: context,
+                  loadAll: true, // Load all questions
                 );
 
                 if (mounted) {
@@ -760,3 +765,4 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 }
+

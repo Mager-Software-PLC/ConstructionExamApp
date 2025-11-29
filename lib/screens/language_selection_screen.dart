@@ -12,14 +12,6 @@ class LanguageSelectionScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final languageProvider = Provider.of<LanguageProvider>(context);
 
-    final languages = [
-      {'code': 'en', 'name': 'English', 'flag': '🇺🇸', 'native': 'English'},
-      {'code': 'am', 'name': 'Amharic', 'flag': '🇪🇹', 'native': 'አማርኛ'},
-      {'code': 'om', 'name': 'Afan Oromo', 'flag': '🇪🇹', 'native': 'Afaan Oromoo'},
-      {'code': 'ti', 'name': 'Tigrinya', 'flag': '🇪🇷', 'native': 'ትግርኛ'},
-      {'code': 'ar', 'name': 'Arabic', 'flag': '🇸🇦', 'native': 'العربية'},
-    ];
-
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -62,69 +54,103 @@ class LanguageSelectionScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 50),
-                ...languages.map((lang) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 8,
+                if (languageProvider.isLoadingLanguages)
+                  const CircularProgressIndicator()
+                else if (languageProvider.languagesError != null)
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Error loading languages',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ElevatedButton(
+                          onPressed: () {
+                            languageProvider.refreshLanguages();
+                          },
+                          child: const Text('Retry'),
+                        ),
+                      ],
                     ),
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await languageProvider.setLanguage(Locale(lang['code']!));
-                        // Mark language as selected
-                        await AppInitializer.setLanguageSelected();
-                        if (context.mounted) {
-                          Navigator.of(context).pushReplacementNamed('/auth');
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.surface,
-                        foregroundColor: Theme.of(context).colorScheme.primary,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 30,
-                          vertical: 20,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        elevation: 5,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            lang['flag']!,
-                            style: const TextStyle(fontSize: 32),
-                          ),
-                          const SizedBox(width: 20),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                lang['name']!,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                lang['native']!,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                  )
+                else if (languageProvider.availableLanguages.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Text(
+                      'No languages available',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     ),
-                  );
-                }).toList(),
+                  )
+                else
+                  ...languageProvider.availableLanguages.map((lang) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 8,
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          await languageProvider.setLanguage(Locale(lang.code.toLowerCase()));
+                          // Mark language as selected
+                          await AppInitializer.setLanguageSelected();
+                          if (context.mounted) {
+                            Navigator.of(context).pushReplacementNamed('/auth');
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.surface,
+                          foregroundColor: Theme.of(context).colorScheme.primary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          elevation: 5,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              lang.flag ?? '🌐',
+                              style: const TextStyle(fontSize: 32),
+                            ),
+                            const SizedBox(width: 20),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  lang.name,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  lang.nativeName,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
               ],
             ),
           ),

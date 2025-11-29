@@ -249,9 +249,9 @@ class MessageProvider with ChangeNotifier {
     }
   }
 
-  Future<void> loadMessages(String conversationId, {bool refresh = false}) async {
+  Future<void> loadMessages(String conversationId, {bool refresh = false, bool loadAll = true}) async {
     try {
-      if (!refresh && _messages.containsKey(conversationId)) {
+      if (!refresh && _messages.containsKey(conversationId) && !loadAll) {
         // Still join the conversation room for real-time updates
         await _socketService.joinConversation(conversationId);
         return; // Already loaded
@@ -265,48 +265,92 @@ class MessageProvider with ChangeNotifier {
       // Join conversation room for real-time updates
       await _socketService.joinConversation(conversationId);
 
-      final response = await _apiService.getMessages(conversationId);
+      // Load all messages with pagination handling
+      List<dynamic> allMessagesList = [];
+      int page = 1;
+      const limit = 1000; // High limit per page
+      bool hasMore = true;
 
-      if (response['success'] == true && response['data'] != null) {
-        final data = response['data'];
-        List<dynamic> messagesList;
+      while (hasMore) {
+        final response = await _apiService.getMessages(conversationId, page: page, limit: limit);
         
-        // Backend returns messages directly as an array
-        if (data is List) {
-          messagesList = data;
-        } else if (data is Map && data['data'] != null) {
-          messagesList = data['data'] as List<dynamic>;
+        if (response['success'] == true && response['data'] != null) {
+          final data = response['data'];
+          List<dynamic> messagesList;
+          
+          // Backend returns messages directly as an array
+          if (data is List) {
+            messagesList = data;
+          } else if (data is Map && data['data'] != null) {
+            messagesList = data['data'] as List<dynamic>;
+          } else {
+            messagesList = [];
+          }
+          
+          allMessagesList.addAll(messagesList);
+          
+          // Check if there are more pages
+          final pagination = response['pagination'] as Map<String, dynamic>?;
+          if (pagination != null) {
+            final totalPages = pagination['totalPages'] as int? ?? 1;
+            final currentPage = pagination['currentPage'] as int? ?? 1;
+            hasMore = loadAll && currentPage < totalPages;
+            if (hasMore) {
+              page = currentPage + 1;
+            }
+          } else {
+            // If no pagination info and we got fewer messages than limit, we're done
+            hasMore = loadAll && messagesList.length >= limit;
+            if (hasMore) {
+              page++;
+            }
+          }
+          
+          // Safety check to avoid infinite loops
+          if (page > 100) {
+            debugPrint('[MessageProvider] Reached max page limit (100), stopping');
+            hasMore = false;
+          }
+          
+          // If loadAll is false, only fetch first page
+          if (!loadAll) {
+            hasMore = false;
+          }
         } else {
-          messagesList = [];
+          hasMore = false;
+          if (page == 1) {
+            _errorMessage = response['message'] ?? 'Failed to load messages';
+          }
         }
-
-        final newMessages = messagesList
-            .map((json) {
-              try {
-                return Message.fromJson(json as Map<String, dynamic>);
-              } catch (e) {
-                debugPrint('Error parsing message: $e');
-                return null;
-              }
-            })
-            .whereType<Message>()
-            .toList();
-        
-        // Sort messages by creation time (oldest first)
-        newMessages.sort((a, b) {
-          final aTime = a.createdAt ?? DateTime(1970);
-          final bTime = b.createdAt ?? DateTime(1970);
-          return aTime.compareTo(bTime);
-        });
-
-        _messages[conversationId] = newMessages;
-        
-        // Note: Notifications for new messages are handled in handleIncomingMessage
-        // when messages arrive via socket in real-time. We don't notify for messages
-        // loaded from API as they are historical messages.
-      } else {
-        _errorMessage = response['message'] ?? 'Failed to load messages';
       }
+
+      // Parse all messages
+      final newMessages = allMessagesList
+          .map((json) {
+            try {
+              return Message.fromJson(json as Map<String, dynamic>);
+            } catch (e) {
+              debugPrint('Error parsing message: $e');
+              return null;
+            }
+          })
+          .whereType<Message>()
+          .toList();
+      
+      // Sort messages by creation time (oldest first)
+      newMessages.sort((a, b) {
+        final aTime = a.createdAt ?? DateTime(1970);
+        final bTime = b.createdAt ?? DateTime(1970);
+        return aTime.compareTo(bTime);
+      });
+
+      _messages[conversationId] = newMessages;
+      
+      debugPrint('[MessageProvider] ✅ Loaded ${newMessages.length} messages from ${page} page(s)');
+      
+      // Note: Notifications for new messages are handled in handleIncomingMessage
+      // when messages arrive via socket in real-time. We don't notify for messages
+      // loaded from API as they are historical messages.
 
       _isLoading = false;
       notifyListeners();

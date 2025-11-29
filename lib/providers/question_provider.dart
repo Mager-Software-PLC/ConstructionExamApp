@@ -23,9 +23,10 @@ class QuestionProvider with ChangeNotifier {
   Future<void> loadQuestions({
     String? categoryId,
     int page = 1,
-    int limit = 50,
+    int limit = 10000, // High limit to fetch all questions
     String? difficulty,
     BuildContext? context,
+    bool loadAll = true, // By default, load all questions
   }) async {
     try {
       _isLoading = true;
@@ -49,21 +50,81 @@ class QuestionProvider with ChangeNotifier {
 
       Map<String, dynamic> response;
       
+      // If loadAll is true, use a high limit to get all questions
+      final actualLimit = loadAll ? 10000 : limit;
+      
       if (categoryId != null) {
         response = await _apiService.getQuestionsByCategory(
           categoryId,
           page: page,
-          limit: limit,
+          limit: actualLimit,
           language: language,
         );
       } else {
         response = await _apiService.getQuestions(
           categoryId: categoryId,
           page: page,
-          limit: limit,
+          limit: actualLimit,
           difficulty: difficulty,
           language: language,
         );
+      }
+      
+      // Handle pagination - if there are more pages and loadAll is true, fetch them
+      if (loadAll && response['pagination'] != null) {
+        final pagination = response['pagination'] as Map<String, dynamic>;
+        final totalPages = pagination['totalPages'] as int? ?? 1;
+        final currentPage = pagination['currentPage'] as int? ?? 1;
+        
+        if (totalPages > currentPage) {
+          debugPrint('[QuestionProvider] Fetching additional pages: $currentPage of $totalPages');
+          
+          // Fetch remaining pages
+          List<dynamic> allQuestionsList = [];
+          if (response['data'] is List) {
+            allQuestionsList.addAll(response['data'] as List);
+          } else if (response['data'] is Map && response['data']['data'] != null) {
+            allQuestionsList.addAll(response['data']['data'] as List);
+          }
+          
+          for (int nextPage = currentPage + 1; nextPage <= totalPages; nextPage++) {
+            try {
+              Map<String, dynamic> nextResponse;
+              if (categoryId != null) {
+                nextResponse = await _apiService.getQuestionsByCategory(
+                  categoryId,
+                  page: nextPage,
+                  limit: actualLimit,
+                  language: language,
+                );
+              } else {
+                nextResponse = await _apiService.getQuestions(
+                  categoryId: categoryId,
+                  page: nextPage,
+                  limit: actualLimit,
+                  difficulty: difficulty,
+                  language: language,
+                );
+              }
+              
+              if (nextResponse['success'] == true) {
+                final nextData = nextResponse['data'];
+                if (nextData is List) {
+                  allQuestionsList.addAll(nextData);
+                } else if (nextData is Map && nextData['data'] != null) {
+                  allQuestionsList.addAll(nextData['data'] as List);
+                }
+              }
+            } catch (e) {
+              debugPrint('[QuestionProvider] Error fetching page $nextPage: $e');
+              // Continue with what we have
+            }
+          }
+          
+          // Update response with all questions
+          response['data'] = allQuestionsList;
+          debugPrint('[QuestionProvider] ✅ Fetched all ${allQuestionsList.length} questions from $totalPages pages');
+        }
       }
 
       if (response['success'] == true) {

@@ -32,10 +32,12 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         // Initialize socket for real-time updates
         await messageProvider.initializeSocket();
-        await messageProvider.loadMessages(widget.conversation.id, refresh: true);
+        // Load all messages with pagination (matches web implementation)
+        await messageProvider.loadMessages(widget.conversation.id, refresh: true, loadAll: true);
         await messageProvider.markAsRead(widget.conversation.id);
         _scrollToBottom();
       } catch (e) {
+        debugPrint('[ChatScreen] Error loading messages: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -49,17 +51,19 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   @override
-  void dispose() {
-    // Disable screenshot protection when leaving chat screen
-    ScreenshotProtectionService().disableProtection();
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Reload messages when screen becomes visible again to ensure all messages are loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final messageProvider = Provider.of<MessageProvider>(context, listen: false);
+      try {
+        await messageProvider.loadMessages(widget.conversation.id, refresh: false, loadAll: true);
+        _scrollToBottom();
+      } catch (e) {
+        debugPrint('[ChatScreen] Error reloading messages: $e');
+      }
+    });
+    
     // Scroll to bottom when new messages arrive
     final messageProvider = Provider.of<MessageProvider>(context);
     final messages = messageProvider.getMessagesForConversation(widget.conversation.id);
@@ -68,6 +72,15 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollToBottom();
       });
     }
+  }
+
+  @override
+  void dispose() {
+    // Disable screenshot protection when leaving chat screen
+    ScreenshotProtectionService().disableProtection();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _scrollToBottom() {

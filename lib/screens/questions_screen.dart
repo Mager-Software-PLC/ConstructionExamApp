@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/question_provider.dart';
 import '../providers/progress_provider.dart';
+import '../providers/language_provider.dart';
 import '../models/api_models.dart' show Question;
 import '../l10n/app_localizations.dart';
 import '../services/screenshot_protection_service.dart';
@@ -47,12 +48,26 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
         await questionProvider.loadQuestions(
           categoryId: widget.categoryId,
           context: context,
+          loadAll: true, // Load all questions
         );
         
         // Load progress and resume from last unanswered question
+        // This preserves which questions have been answered
         if (widget.categoryId != null && questionProvider.questions.isNotEmpty) {
           await _loadCategoryProgressAndResume();
         }
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload progress when screen becomes visible again
+    // This ensures answered questions are preserved when returning to the screen
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (widget.categoryId != null) {
+        await _loadCategoryProgressAndResume();
       }
     });
   }
@@ -159,36 +174,51 @@ class _QuestionsScreenState extends State<QuestionsScreen> with AutomaticKeepAli
       _isSubmitting = true;
     });
 
+    // Get the option order (matches web implementation - uses order property)
+    final selectedOption = question.options[selectedIndex];
+    final selectedOrder = selectedOption.order ?? selectedIndex; // Use order property, fallback to index
+    
+    final correctOption = question.options.firstWhere((opt) => opt.isCorrect);
+    final correctOrder = correctOption.order ?? question.options.indexWhere((opt) => opt.isCorrect);
+    final isCorrect = selectedOrder == correctOrder;
+
     setState(() {
       _selectedAnswerIndex = selectedIndex;
-      final correctOptionIndex = question.options.indexWhere((opt) => opt.isCorrect);
-      _isCorrect = selectedIndex == correctOptionIndex;
+      _isCorrect = isCorrect;
       _showFeedback = true;
-      _isSubmitting = false;
     });
 
     final progressProvider =
         Provider.of<ProgressProvider>(context, listen: false);
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+    
+    // Submit answer using order number (matching web implementation)
     await progressProvider.submitAnswer(
       questionId: question.id,
-      selectedOption: String.fromCharCode(65 + selectedIndex),
+      selectedAnswer: selectedOrder, // Use order number (int) not string
       categoryId: question.categoryId,
+      timeSpent: 0, // TODO: Track actual time spent if needed
+      language: languageProvider.locale.languageCode,
     );
 
     // Mark question as answered
     setState(() {
       _answeredQuestionIds.add(question.id);
       _questionAnswers[question.id] = {
-        'selectedAnswer': selectedIndex,
-        'isCorrect': _isCorrect,
+        'selectedAnswer': selectedIndex, // Keep index for UI display
+        'isCorrect': isCorrect,
       };
+      _isSubmitting = false;
     });
 
-    // Reload progress to get updated scores
-    await _loadProgress();
+    // Reload category progress to get updated answered questions list
+    if (widget.categoryId != null) {
+      await _loadCategoryProgressAndResume();
+    }
     
-    // Also reload category progress to update the categories screen
-    // This will be picked up when user returns to categories screen
+    // Reload overall progress stats
+    await _loadProgress();
   }
 
   Future<void> _nextQuestion() async {

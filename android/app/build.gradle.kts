@@ -56,16 +56,16 @@ android {
         }
     }
     
-    // Split APKs by ABI to reduce size - each APK will only include native libraries for one architecture
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            // Only include commonly used architectures
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = false
-        }
-    }
+    // Build single universal APK (disabled splits for easier distribution)
+    // splits {
+    //     abi {
+    //         isEnable = true
+    //         reset()
+    //         // Only include commonly used architectures
+    //         include("armeabi-v7a", "arm64-v8a", "x86_64")
+    //         isUniversalApk = false
+    //     }
+    // }
     
     // Optimize build and reduce size
     packaging {

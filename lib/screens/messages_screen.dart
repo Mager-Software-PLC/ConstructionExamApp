@@ -21,7 +21,6 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
   bool get wantKeepAlive => true;
 
   Conversation? _selectedConversation;
-  final ScrollController _conversationsScrollController = ScrollController();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _messagesScrollController = ScrollController();
   bool _isSending = false;
@@ -41,18 +40,46 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
       }
       
       try {
-        debugPrint('[MessagesScreen] Loading conversations...');
+        debugPrint('[MessagesScreen] Initializing and loading admin conversation...');
         // Initialize socket for real-time updates
         await messageProvider.initializeSocket();
-        // Load conversations
+        
+        // Load conversations to check if one exists
         await messageProvider.loadConversations();
         debugPrint('[MessagesScreen] ✅ Conversations loaded: ${messageProvider.conversations.length}');
+        
+        // Get or create conversation with admin
+        Conversation? conversation;
+        if (messageProvider.conversations.isNotEmpty) {
+          // Use the first (most recent) conversation
+          conversation = messageProvider.conversations.first;
+          debugPrint('[MessagesScreen] Using existing conversation: ${conversation.id}');
+        } else {
+          // Create a new conversation
+          debugPrint('[MessagesScreen] No existing conversation, creating new one...');
+          conversation = await messageProvider.createConversation();
+          if (conversation != null) {
+            debugPrint('[MessagesScreen] ✅ Created new conversation: ${conversation.id}');
+          }
+        }
+        
+        // Navigate directly to chat screen with admin
+        if (conversation != null && mounted) {
+          _selectConversation(conversation);
+        } else if (mounted && messageProvider.errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(messageProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       } catch (e) {
-        debugPrint('[MessagesScreen] ❌ Error loading conversations: $e');
+        debugPrint('[MessagesScreen] ❌ Error loading conversation: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error loading conversations: ${e.toString()}'),
+              content: Text('Error loading conversation: ${e.toString()}'),
               backgroundColor: Colors.red,
             ),
           );
@@ -66,7 +93,6 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
   @override
   void dispose() {
     _messageController.dispose();
-    _conversationsScrollController.dispose();
     _messagesScrollController.dispose();
     _messageFocusNode.dispose();
     super.dispose();
@@ -91,7 +117,7 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
 
     final messageProvider = Provider.of<MessageProvider>(context, listen: false);
     try {
-      await messageProvider.loadMessages(conversation.id, refresh: true);
+        await messageProvider.loadMessages(conversation.id, refresh: true, loadAll: true);
       await messageProvider.markAsRead(conversation.id);
       _scrollToBottom();
       
@@ -116,7 +142,6 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
 
   Future<void> _createAndSelectConversation() async {
     final messageProvider = Provider.of<MessageProvider>(context, listen: false);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
     // Check token directly instead of relying on authProvider.isAuthenticated
     // This handles cases where token exists but user data hasn't loaded yet
@@ -251,28 +276,6 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     }
   }
 
-  String _formatDateTime(DateTime? dateTime) {
-    if (dateTime == null) return '';
-    
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays == 0) {
-      final hour = dateTime.hour;
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-      return '$displayHour:$minute $period';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return days[dateTime.weekday - 1];
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
-  }
-
   String _formatMessageTime(DateTime? dateTime) {
     if (dateTime == null) return '';
     
@@ -307,9 +310,24 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
     final isWideScreen = MediaQuery.of(context).size.width > 600;
     final screenHeight = MediaQuery.of(context).size.height;
 
+    // Always show chat view (skip conversations list)
+    // Show loading if no conversation is selected yet
     if (!isWideScreen) {
-      if (_selectedConversation == null) {
-        return _buildConversationsList(context, l10n, messageProvider, isWideScreen);
+      if (_selectedConversation == null && messageProvider.isLoading) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(l10n.translate('messages')),
+          ),
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      } else if (_selectedConversation == null) {
+        // If still no conversation after loading, show empty state with option to create
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(l10n.translate('messages')),
+          ),
+          body: _buildEmptyConversationsState(context, l10n),
+        );
       } else {
         return _buildChatView(context, l10n, messageProvider, currentUserId, isWideScreen, screenHeight);
       }
@@ -350,114 +368,14 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
           ),
         ],
       ),
-      body: Row(
-        children: [
-          Container(
-            width: 350,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                right: BorderSide(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: _buildConversationsList(context, l10n, messageProvider, isWideScreen),
-          ),
-          Expanded(
-            child: _buildChatView(context, l10n, messageProvider, currentUserId, isWideScreen, screenHeight),
-          ),
-        ],
-      ),
+      body: _selectedConversation == null && messageProvider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _selectedConversation == null
+              ? _buildEmptyConversationsState(context, l10n)
+              : _buildChatView(context, l10n, messageProvider, currentUserId, isWideScreen, screenHeight),
     );
   }
 
-  Widget _buildConversationsList(
-    BuildContext context,
-    AppLocalizations l10n,
-    MessageProvider messageProvider,
-    bool isWideScreen,
-  ) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: isWideScreen ? null : AppBar(
-        elevation: 0,
-        title: Text(
-          l10n.translate('messages'),
-          style: AppTypography.titleLarge.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'New conversation',
-            onPressed: _createAndSelectConversation,
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () => messageProvider.loadConversations(),
-        child: messageProvider.isLoading && messageProvider.conversations.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Loading conversations...',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                      ),
-                    ),
-                    if (messageProvider.errorMessage != null) ...[
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Text(
-                          messageProvider.errorMessage!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              )
-            : messageProvider.conversations.isEmpty
-                ? _buildEmptyConversationsState(context, l10n)
-                : ListView.builder(
-                    controller: _conversationsScrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: messageProvider.conversations.length,
-                    itemBuilder: (context, index) {
-                      final conversation = messageProvider.conversations[index];
-                      final hasUnread = conversation.unreadCount > 0;
-                      final isSelected = _selectedConversation?.id == conversation.id;
-
-                      return _buildConversationItem(
-                        context,
-                        conversation,
-                        hasUnread,
-                        isSelected,
-                        isWideScreen,
-                      );
-                    },
-                  ),
-      ),
-      floatingActionButton: messageProvider.conversations.isNotEmpty
-          ? FloatingActionButton(
-              onPressed: _createAndSelectConversation,
-              child: const Icon(Icons.add),
-            )
-          : null,
-    );
-  }
 
   Widget _buildEmptyConversationsState(BuildContext context, AppLocalizations l10n) {
     return Center(
@@ -510,142 +428,6 @@ class _MessagesScreenState extends State<MessagesScreen> with AutomaticKeepAlive
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildConversationItem(
-    BuildContext context,
-    Conversation conversation,
-    bool hasUnread,
-    bool isSelected,
-    bool isWideScreen,
-  ) {
-    return InkWell(
-      onTap: () {
-        if (isWideScreen) {
-          _selectConversation(conversation);
-        } else {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(conversation: conversation),
-            ),
-          );
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-          leading: Stack(
-            children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.support_agent,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-              if (hasUnread)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.error,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.surface,
-                        width: 2,
-                      ),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${conversation.unreadCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Support',
-                  style: AppTypography.titleMedium.copyWith(
-                    fontWeight: hasUnread ? FontWeight.bold : FontWeight.w600,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              Text(
-                _formatDateTime(
-                  conversation.lastMessageAt ?? conversation.createdAt,
-                ),
-                style: AppTypography.labelSmall.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                  fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              conversation.lastMessage ?? 'No messages yet',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodyMedium.copyWith(
-                color: hasUnread
-                    ? Theme.of(context).colorScheme.onSurface
-                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
-              ),
-            ),
-          ),
         ),
       ),
     );

@@ -564,3 +564,61 @@ class Material {
   }
 }
 
+class Language {
+  final String id;
+  final String code;
+  final String name;
+  final String nativeName;
+  final String? flag;
+  final bool isActive;
+  final int order;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  Language({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.nativeName,
+    this.flag,
+    this.isActive = true,
+    this.order = 0,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory Language.fromJson(Map<String, dynamic> json) {
+    return Language(
+      id: json['_id'] ?? json['id'] ?? '',
+      code: json['code'] ?? '',
+      name: json['name'] ?? '',
+      nativeName: json['nativeName'] ?? '',
+      flag: json['flag'],
+      isActive: json['isActive'] ?? true,
+      order: json['order'] ?? 0,
+      createdAt: json['createdAt'] != null 
+          ? (json['createdAt'] is String 
+              ? DateTime.parse(json['createdAt']) 
+              : DateTime.fromMillisecondsSinceEpoch(json['createdAt']))
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? (json['updatedAt'] is String 
+              ? DateTime.parse(json['updatedAt']) 
+              : DateTime.fromMillisecondsSinceEpoch(json['updatedAt']))
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'code': code,
+      'name': name,
+      'nativeName': nativeName,
+      'flag': flag,
+      'isActive': isActive,
+      'order': order,
+    };
+  }
+}
+

@@ -539,48 +539,77 @@ class _ProfileScreenState extends State<ProfileScreen> with AutomaticKeepAliveCl
       child: Consumer<LanguageProvider>(
         builder: (context, languageProvider, _) {
           final currentLocale = languageProvider.locale;
-          final languages = [
-            {'code': 'en', 'name': 'English', 'flag': '🇺🇸', 'native': 'English'},
-            {'code': 'am', 'name': 'Amharic', 'flag': '🇪🇹', 'native': 'አማርኛ'},
-            {'code': 'om', 'name': 'Afan Oromo', 'flag': '🇪🇹', 'native': 'Afaan Oromoo'},
-            {'code': 'ti', 'name': 'Tigrinya', 'flag': '🇪🇷', 'native': 'ትግርኛ'},
-            {'code': 'ar', 'name': 'Arabic', 'flag': '🇸🇦', 'native': 'العربية'},
-          ];
+          final availableLanguages = languageProvider.availableLanguages;
           
-          final currentLang = languages.firstWhere(
-            (lang) => lang['code'] == currentLocale.languageCode,
-            orElse: () => languages[0],
-          );
+          // Find current language or default to first available
+          final currentLang = availableLanguages.isNotEmpty
+              ? (availableLanguages.firstWhere(
+                  (lang) => lang.code.toLowerCase() == currentLocale.languageCode.toLowerCase(),
+                  orElse: () => availableLanguages.first,
+                ))
+              : null;
+
+          if (languageProvider.isLoadingLanguages) {
+            return ExpansionTile(
+              leading: const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              title: Text(l10n.translate('language'), style: AppTypography.titleMedium),
+              subtitle: const Text('Loading languages...'),
+              children: [],
+            );
+          }
+
+          if (availableLanguages.isEmpty || currentLang == null) {
+            return ExpansionTile(
+              leading: const Text('🌐', style: TextStyle(fontSize: 28)),
+              title: Text(l10n.translate('language'), style: AppTypography.titleMedium),
+              subtitle: const Text('No languages available'),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      languageProvider.refreshLanguages();
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ),
+              ],
+            );
+          }
 
           return ExpansionTile(
-            leading: Text(currentLang['flag']!, style: const TextStyle(fontSize: 28)),
+            leading: Text(currentLang.flag ?? '🌐', style: const TextStyle(fontSize: 28)),
             title: Text(l10n.translate('language'), style: AppTypography.titleMedium),
-            subtitle: Text(currentLang['name']!, style: AppTypography.bodySmall),
-            children: languages.map((lang) {
+            subtitle: Text(currentLang.name, style: AppTypography.bodySmall),
+            children: availableLanguages.map((lang) {
               return RadioListTile<String>(
                 title: Row(
                   children: [
-                    Text(lang['flag']!, style: const TextStyle(fontSize: 24)),
+                    Text(lang.flag ?? '🌐', style: const TextStyle(fontSize: 24)),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(lang['name']!, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                        Text(lang['native']!, style: AppTypography.bodySmall),
+                        Text(lang.name, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                        Text(lang.nativeName, style: AppTypography.bodySmall),
                       ],
                     ),
                   ],
                 ),
-                value: lang['code']!,
-                groupValue: currentLocale.languageCode,
+                value: lang.code.toLowerCase(),
+                groupValue: currentLocale.languageCode.toLowerCase(),
                 onChanged: (value) async {
                   if (value != null) {
                     await languageProvider.setLanguage(Locale(value));
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('${l10n.translate('language')} changed to ${lang['name']}'),
+                          content: Text('${l10n.translate('language')} changed to ${lang.name}'),
                           backgroundColor: Colors.green,
                           duration: const Duration(seconds: 2),
                         ),

@@ -2,7 +2,7 @@
 /// Centralized configuration for API endpoints and URLs
 class AppConfig {
   // Backend API base URL
-  static const String backendBaseUrl = 'http://10.145.60.161:5000';
+  static const String backendBaseUrl = 'http://192.168.100.254:5000';
   static const String apiBaseUrl = '$backendBaseUrl/api';
   
   // Socket.IO server URL (same as backend base URL)

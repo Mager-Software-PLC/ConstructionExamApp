@@ -637,7 +637,7 @@ class ApiService {
   // Progress endpoints
   Future<Map<String, dynamic>> submitAnswer({
     required String questionId,
-    required String selectedAnswer,
+    required int selectedAnswer, // Changed to int to match web (order/index)
     String? categoryId,
     int? timeSpent,
     String? language,
@@ -647,7 +647,7 @@ class ApiService {
       '/progress/submit',
       body: {
         'questionId': questionId,
-        'selectedAnswer': selectedAnswer,
+        'selectedAnswer': selectedAnswer, // Send as number (order/index)
         if (categoryId != null) 'categoryId': categoryId,
         if (timeSpent != null) 'timeSpent': timeSpent,
         if (language != null) 'language': language,
@@ -779,6 +779,10 @@ class ApiService {
       requiresAuth: false,
     );
   }
+
+  Future<Map<String, dynamic>> downloadCertificate(String certificateId) async {
+    return await _request('GET', '/certificates/download/$certificateId');
+  }
   
   // User endpoints
   Future<Map<String, dynamic>> getUserById(String id) async {
@@ -867,6 +871,15 @@ class ApiService {
 
   Future<Map<String, dynamic>> deleteMaterial(String id) async {
     return await _request('DELETE', '/materials/$id');
+  }
+
+  // Language endpoints
+  Future<Map<String, dynamic>> getLanguages() async {
+    return await _request('GET', '/languages', requiresAuth: false);
+  }
+
+  Future<Map<String, dynamic>> getLanguageById(String id) async {
+    return await _request('GET', '/languages/$id', requiresAuth: false);
   }
 }
 

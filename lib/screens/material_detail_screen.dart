@@ -1,54 +1,255 @@
+import 'dart:io';
 import 'package:flutter/material.dart' hide Material;
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:open_file/open_file.dart';
 import '../models/api_models.dart' show Material;
 import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
 
-class MaterialDetailScreen extends StatelessWidget {
+class MaterialDetailScreen extends StatefulWidget {
   final Material material;
 
   const MaterialDetailScreen({super.key, required this.material});
 
+  @override
+  State<MaterialDetailScreen> createState() => _MaterialDetailScreenState();
+}
+
+class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
+  bool _isDownloading = false;
+  bool _isOpening = false;
+
   Future<void> _openPDF(BuildContext context) async {
-    final baseUrl = AppConfig.backendBaseUrl;
-    final fileUrl = '$baseUrl${material.fileUrl}';
+    if (_isOpening) return;
+    
+    setState(() {
+      _isOpening = true;
+    });
 
     try {
+      final baseUrl = AppConfig.backendBaseUrl;
+      final fileUrl = '$baseUrl${widget.material.fileUrl}';
+
+      // Try to open in external app first (better user experience)
       final uri = Uri.parse(fileUrl);
       if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        // Fallback: Copy to clipboard
-        await Clipboard.setData(ClipboardData(text: fileUrl));
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text('PDF URL copied to clipboard. Open it in your browser.'),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (launched && context.mounted) {
+          setState(() {
+            _isOpening = false;
+          });
+          return;
         }
       }
+
+      // If external launch fails, download and open locally
+      await _downloadAndOpenPDF(context, fileUrl);
     } catch (e) {
-      // Fallback: Copy to clipboard
-      try {
-        await Clipboard.setData(ClipboardData(text: fileUrl));
+      debugPrint('Error opening PDF: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isOpening = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadAndOpenPDF(BuildContext context, String fileUrl) async {
+    try {
+      // Get token for authenticated requests
+      final apiService = ApiService();
+      final token = await apiService.getToken();
+      
+      final headers = <String, String>{
+        'Content-Type': 'application/pdf',
+      };
+      
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Downloading PDF...'),
+                ),
+              ],
+            ),
+            duration: Duration(seconds: 30),
+          ),
+        );
+      }
+
+      // Download the PDF
+      final response = await http.get(Uri.parse(fileUrl), headers: headers);
+      
+      if (response.statusCode == 200) {
+        // Get the directory for saving the file
+        final directory = await getApplicationDocumentsDirectory();
+        final filePath = '${directory.path}/${widget.material.fileName}';
+        final file = File(filePath);
+        
+        // Write the file
+        await file.writeAsBytes(response.bodyBytes);
+        
+        // Open the file
+        try {
+          final result = await OpenFile.open(filePath);
+          
+          if (context.mounted) {
+            // Check if file was opened successfully (result.type == ResultType.done)
+            if (result.type.toString().contains('done') || result.message == 'done') {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.white),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text('PDF opened successfully'),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error opening PDF: ${result.message}'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          }
+        } catch (openError) {
+          debugPrint('Error opening file: $openError');
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error opening PDF: $openError'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      } else {
+        throw Exception('Failed to download PDF: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error downloading PDF: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadPDF(BuildContext context) async {
+    if (_isDownloading) return;
+    
+    setState(() {
+      _isDownloading = true;
+    });
+
+    try {
+      final baseUrl = AppConfig.backendBaseUrl;
+      final fileUrl = '$baseUrl${widget.material.fileUrl}';
+
+      // Get token for authenticated requests
+      final apiService = ApiService();
+      final token = await apiService.getToken();
+      
+      final headers = <String, String>{
+        'Content-Type': 'application/pdf',
+      };
+      
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Downloading PDF...'),
+                ),
+              ],
+            ),
+            duration: Duration(seconds: 30),
+          ),
+        );
+      }
+
+      // Download the PDF
+      final response = await http.get(Uri.parse(fileUrl), headers: headers);
+      
+      if (response.statusCode == 200) {
+        // Get the directory for saving the file (Downloads directory if available)
+        Directory? directory;
+        if (Platform.isAndroid) {
+          // Try to get external storage directory for Android
+          directory = await getExternalStorageDirectory();
+          if (directory != null) {
+            final downloadsPath = '${directory.path}/Download';
+            directory = Directory(downloadsPath);
+            if (!await directory.exists()) {
+              await directory.create(recursive: true);
+            }
+          }
+        }
+        
+        // Fallback to application documents directory
+        directory ??= await getApplicationDocumentsDirectory();
+        final filePath = '${directory.path}/${widget.material.fileName}';
+        final file = File(filePath);
+        
+        // Write the file
+        await file.writeAsBytes(response.bodyBytes);
+        
         if (context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -56,34 +257,51 @@ class MaterialDetailScreen extends StatelessWidget {
                   const Icon(Icons.check_circle, color: Colors.white),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text('PDF URL copied to clipboard: ${e.toString()}'),
+                    child: Text('PDF downloaded to: ${file.path}'),
                   ),
                 ],
               ),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Share',
+                textColor: Colors.white,
+                onPressed: () {
+                  Share.shareXFiles(
+                    [XFile(file.path)],
+                    text: '${widget.material.title} - ${widget.material.description}',
+                  );
+                },
               ),
             ),
           );
         }
-      } catch (clipboardError) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      } else {
+        throw Exception('Failed to download PDF: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error downloading PDF: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
       }
     }
   }
 
   Future<void> _copyUrl(BuildContext context) async {
     final baseUrl = AppConfig.backendBaseUrl;
-    final fileUrl = '$baseUrl${material.fileUrl}';
+    final fileUrl = '$baseUrl${widget.material.fileUrl}';
 
     try {
       await Clipboard.setData(ClipboardData(text: fileUrl));
@@ -136,7 +354,7 @@ class MaterialDetailScreen extends StatelessWidget {
             backgroundColor: Theme.of(context).colorScheme.primary,
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
-                material.title,
+                widget.material.title,
                 style: AppTypography.titleMedium.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -193,7 +411,7 @@ class MaterialDetailScreen extends StatelessWidget {
                   const SizedBox(height: 32),
                   
                   // Description Card
-                  if (material.description.isNotEmpty) ...[
+                  if (widget.material.description.isNotEmpty) ...[
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -225,7 +443,7 @@ class MaterialDetailScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              material.description,
+                              widget.material.description,
                               style: AppTypography.bodyLarge.copyWith(
                                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
                                 height: 1.6,
@@ -273,31 +491,31 @@ class MaterialDetailScreen extends StatelessWidget {
                             context,
                             Icons.insert_drive_file,
                             'File Name',
-                            material.fileName,
+                            widget.material.fileName,
                           ),
                           const Divider(height: 32),
                           _buildInfoRow(
                             context,
                             Icons.storage,
                             'File Size',
-                            material.fileSizeFormatted,
+                            widget.material.fileSizeFormatted,
                           ),
-                          if (material.uploadedByName != null) ...[
+                          if (widget.material.uploadedByName != null) ...[
                             const Divider(height: 32),
                             _buildInfoRow(
                               context,
                               Icons.person,
                               'Uploaded By',
-                              material.uploadedByName!,
+                              widget.material.uploadedByName!,
                             ),
                           ],
-                          if (material.createdAt != null) ...[
+                          if (widget.material.createdAt != null) ...[
                             const Divider(height: 32),
                             _buildInfoRow(
                               context,
                               Icons.calendar_today,
                               'Uploaded On',
-                              '${material.createdAt!.day}/${material.createdAt!.month}/${material.createdAt!.year}',
+                              '${widget.material.createdAt!.day}/${widget.material.createdAt!.month}/${widget.material.createdAt!.year}',
                             ),
                           ],
                         ],
@@ -307,33 +525,71 @@ class MaterialDetailScreen extends StatelessWidget {
                   const SizedBox(height: 32),
                   
                   // Action Buttons
-                  Row(
+                  Column(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _openPDF(context),
-                          icon: const Icon(Icons.open_in_new),
-                          label: Text(l10n.translate('open_pdf') != null ? l10n.translate('open_pdf')! : 'Open PDF'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isOpening ? null : () => _openPDF(context),
+                              icon: _isOpening
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.open_in_new),
+                              label: Text(_isOpening ? 'Opening...' : l10n.translate('open_pdf')),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 2,
+                              ),
                             ),
-                            elevation: 2,
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isDownloading ? null : () => _downloadPDF(context),
+                              icon: _isDownloading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.download),
+                              label: Text(_isDownloading ? 'Downloading...' : 'Download'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 2,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: () => _copyUrl(context),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          elevation: 2,
+                          elevation: 1,
                         ),
-                        child: const Icon(Icons.copy),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.copy, size: 20),
+                            SizedBox(width: 8),
+                            Text('Copy URL'),
+                          ],
+                        ),
                       ),
                     ],
                   ),

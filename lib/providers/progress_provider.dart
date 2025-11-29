@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 
@@ -10,19 +11,35 @@ class ProgressProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   Map<String, dynamic>? get currentProgress => _currentProgress;
 
+  Future<String?> _getCurrentLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('language_code') ?? 'en';
+    } catch (e) {
+      return 'en';
+    }
+  }
+
   Future<bool> submitAnswer({
     required String questionId,
-    required String selectedOption,
+    required int selectedAnswer, // Changed to int (order/index) to match web
     required String categoryId,
+    int? timeSpent,
+    String? language,
   }) async {
     try {
       _isLoading = true;
       notifyListeners();
 
+      // Get current language if not provided
+      final currentLanguage = language ?? await _getCurrentLanguage();
+
       final response = await _apiService.submitAnswer(
         questionId: questionId,
-        selectedAnswer: selectedOption,
+        selectedAnswer: selectedAnswer, // Send as number (order/index)
         categoryId: categoryId,
+        timeSpent: timeSpent,
+        language: currentLanguage,
       );
 
       _isLoading = false;
