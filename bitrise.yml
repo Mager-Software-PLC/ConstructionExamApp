@@ -93,6 +93,68 @@ workflows:
             - ios_output_pattern: "*.ipa"
       - deploy-to-bitrise-io@2: {}
 
+  run_tests:
+    description: "Run tests workflow - matches Bitrise default"
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+      - git-clone@7: {}
+      - cache-pull@2: {}
+      - flutter-installer@0:
+          inputs:
+            - flutter_version: stable
+      - script@1:
+          title: "Flutter pub get"
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                cd "$BITRISE_FLUTTER_PROJECT_LOCATION"
+                flutter pub get
+      - cocoapods-install@2:
+          inputs:
+            - podfile_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/ios/Podfile"
+            - source_root_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/ios"
+      - flutter-test@0:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+      - cache-push@2: {}
+      - deploy-to-bitrise-io@2: {}
+
+  archive_and_export_app:
+    description: "Archive and export app workflow - matches Bitrise default"
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+      - git-clone@7: {}
+      - cache-pull@2: {}
+      - flutter-installer@0:
+          inputs:
+            - flutter_version: stable
+      - script@1:
+          title: "Flutter pub get"
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                cd "$BITRISE_FLUTTER_PROJECT_LOCATION"
+                flutter pub get
+      - cocoapods-install@2:
+          inputs:
+            - podfile_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/ios/Podfile"
+            - source_root_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/ios"
+      - certificate-and-profile-installer@1:
+          inputs:
+            - xcode_project_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/$XCODE_PROJECT_PATH"
+      - flutter-build-ios@1:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+            - xcode_project_path: "$XCODE_PROJECT_PATH"
+            - xcode_scheme: "$XCODE_SCHEME"
+            - ios_output_type: IPA
+            - ios_output_pattern: "*.ipa"
+      - deploy-to-bitrise-io@2: {}
+
   android:
     description: "Android workflow"
     steps:
