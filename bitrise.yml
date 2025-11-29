@@ -1,0 +1,79 @@
+format_version: '11'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+project_type: flutter
+app:
+  envs:
+    - FLUTTER_ROOT: /usr/local/flutter
+    - FLUTTER_VERSION: stable
+    - XCODE_PROJECT_PATH: ios/Runner.xcworkspace
+    - XCODE_SCHEME: Runner
+
+workflows:
+  primary:
+    description: "Primary workflow for iOS build"
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+      - git-clone@7: {}
+      - cache-pull@2: {}
+      - flutter-installer@0:
+          inputs:
+            - flutter_version: stable
+      - flutter-test@0:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+      - cache-push@2: {}
+      - flutter-build-ios@1:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+            - ios_output_type: IPA
+            - ios_output_pattern: "*.ipa"
+      - deploy-to-bitrise-io@2: {}
+
+  ios:
+    description: "iOS workflow with Xcode project configuration"
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+      - git-clone@7: {}
+      - cache-pull@2: {}
+      - flutter-installer@0:
+          inputs:
+            - flutter_version: stable
+      - install-missing-android-tools@4: {}
+      - flutter-test@0:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+      - certificate-and-profile-installer@1:
+          inputs:
+            - xcode_project_path: "$XCODE_PROJECT_PATH"
+      - flutter-build-ios@1:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+            - xcode_project_path: "$XCODE_PROJECT_PATH"
+            - xcode_scheme: "$XCODE_SCHEME"
+            - ios_output_type: IPA
+            - ios_output_pattern: "*.ipa"
+      - deploy-to-bitrise-io@2: {}
+
+  android:
+    description: "Android workflow"
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+      - git-clone@7: {}
+      - cache-pull@2: {}
+      - flutter-installer@0:
+          inputs:
+            - flutter_version: stable
+      - install-missing-android-tools@4: {}
+      - flutter-test@0:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+      - flutter-build-apk@0:
+          inputs:
+            - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+            - build_apk_task: "assembleRelease"
+      - deploy-to-bitrise-io@2: {}
+
