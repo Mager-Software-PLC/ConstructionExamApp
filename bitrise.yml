@@ -20,13 +20,34 @@ workflows:
       - flutter-installer@0:
           inputs:
             - flutter_version: stable
+      - script@1:
+          title: "Flutter pub get"
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                cd "$BITRISE_FLUTTER_PROJECT_LOCATION"
+                flutter pub get
+      - script@1:
+          title: "Install CocoaPods dependencies"
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                cd "$BITRISE_FLUTTER_PROJECT_LOCATION/ios"
+                pod install
       - flutter-test@0:
           inputs:
             - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
       - cache-push@2: {}
+      - certificate-and-profile-installer@1:
+          inputs:
+            - xcode_project_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/$XCODE_PROJECT_PATH"
       - flutter-build-ios@1:
           inputs:
             - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
+            - xcode_project_path: "$XCODE_PROJECT_PATH"
+            - xcode_scheme: "$XCODE_SCHEME"
             - ios_output_type: IPA
             - ios_output_pattern: "*.ipa"
       - deploy-to-bitrise-io@2: {}
@@ -41,13 +62,28 @@ workflows:
       - flutter-installer@0:
           inputs:
             - flutter_version: stable
-      - install-missing-android-tools@4: {}
+      - script@1:
+          title: "Flutter pub get"
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                cd "$BITRISE_FLUTTER_PROJECT_LOCATION"
+                flutter pub get
+      - script@1:
+          title: "Install CocoaPods dependencies"
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                cd "$BITRISE_FLUTTER_PROJECT_LOCATION/ios"
+                pod install
       - flutter-test@0:
           inputs:
             - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
       - certificate-and-profile-installer@1:
           inputs:
-            - xcode_project_path: "$XCODE_PROJECT_PATH"
+            - xcode_project_path: "$BITRISE_FLUTTER_PROJECT_LOCATION/$XCODE_PROJECT_PATH"
       - flutter-build-ios@1:
           inputs:
             - project_location: "$BITRISE_FLUTTER_PROJECT_LOCATION"
